@@ -19,7 +19,7 @@ export interface SiteConfig {
 export const SITE_CONFIG: Readonly<SiteConfig> = {
   name: 'ECargyan',
   shortName: 'ECargyan',
-  tagline: 'Automated Editorial & Automotive Intelligence',
+  tagline: 'Authoritative Electric Vehicle & Automotive Intelligence',
   description: 'ECargyan delivers authoritative editorial insights, technical analysis, and intelligence across modern automotive and mobility ecosystems.',
   url: 'https://ecargyan.com',
   defaultOgImage: '/media/og-default.png',

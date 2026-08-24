@@ -13,7 +13,7 @@ const BLOCKED_HOSTS = new Set([
   'instance-data',
 ]);
 
-const USER_AGENT = 'ECargyan-Editorial-Bot/1.0 (+https://ecargyan.com/about; research@ecargyan.com)';
+const USER_AGENT = 'Mozilla/5.0 (compatible; ECargyanEditorial/1.0; +https://ecargyan.com/about; editorial@ecargyan.com)';
 const DEFAULT_TIMEOUT_MS = 10000; // 10 seconds
 const MAX_RESPONSE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
