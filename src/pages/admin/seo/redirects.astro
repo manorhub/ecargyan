@@ -1,0 +1,309 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+import { RedirectService } from '../../../lib/seo/redirects';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+const redirects = await dbService.listRedirects();
+const { loops, chains } = RedirectService.analyzeRedirectCycles(redirects);
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title="301 Redirects Manager" currentPath="/admin/seo">
+  <div class="page-header">
+    <div>
+      <a href="/admin/seo" class="back-link">&larr; Back to SEO Overview</a>
+      <h1 class="page-title">301/302 URL Redirects</h1>
+      <p class="page-description">Manage HTTP URL redirects to preserve search ranking equity when URLs change.</p>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  {loops.length > 0 && (
+    <div class="alert alert-danger">
+      <strong>Redirect Loop Detected:</strong> The path <code>{loops[0].path}</code> forms a circular redirect chain ({loops[0].chain.join(' &rarr; ')}). Please remove or fix this rule.
+    </div>
+  )}
+
+  {chains.length > 0 && (
+    <div class="alert alert-warning">
+      <strong>Multi-hop Redirect Chain Detected:</strong> <code>{chains[0].source}</code> &rarr; <code>{chains[0].intermediate}</code> &rarr; <code>{chains[0].final}</code>. Consider pointing directly to <code>{chains[0].final}</code>.
+    </div>
+  )}
+
+  <div class="redirects-grid">
+    <!-- Left: Create Redirect Form -->
+    <div class="card">
+      <h2 class="card-title">Add New Redirect Rule</h2>
+      <form action="/admin/seo/redirects/create" method="POST" class="redirect-form">
+        <div class="form-group">
+          <label for="source_path" class="form-label">Source Path (Old URL)</label>
+          <input
+            type="text"
+            id="source_path"
+            name="source_path"
+            class="form-input"
+            placeholder="/old-article-slug"
+            required
+          />
+          <span class="field-hint">Relative path starting with a slash.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="destination_path" class="form-label">Destination Path (Target URL)</label>
+          <input
+            type="text"
+            id="destination_path"
+            name="destination_path"
+            class="form-input"
+            placeholder="/article/new-slug or https://..."
+            required
+          />
+          <span class="field-hint">Relative path or full destination URL.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="status_code" class="form-label">HTTP Status Code</label>
+          <select id="status_code" name="status_code" class="form-input">
+            <option value="301" selected>301 — Permanent Redirect (Recommended)</option>
+            <option value="302">302 — Temporary Redirect</option>
+          </select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-block">Add Redirect Rule</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right: Existing Redirects List -->
+    <div class="card">
+      <h2 class="card-title">Active Redirect Rules ({redirects.length})</h2>
+
+      {redirects.length === 0 ? (
+        <div class="empty-box">
+          <p class="empty-text">No redirect rules configured.</p>
+          <span class="empty-subtext">301 redirects preserve SEO link equity when article slugs are updated.</span>
+        </div>
+      ) : (
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Source &rarr; Target</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {redirects.map((r) => (
+                <tr>
+                  <td>
+                    <div class="redirect-flow">
+                      <span class="source-text">{r.source_path}</span>
+                      <span class="arrow">&rarr;</span>
+                      <span class="dest-text">{r.destination_path}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge badge-success">{r.status_code}</span>
+                  </td>
+                  <td>
+                    <span class="date-text">{formatDate(r.created_at)}</span>
+                  </td>
+                  <td class="text-right">
+                    <form action="/admin/seo/redirects/delete" method="POST" style="display:inline;">
+                      <input type="hidden" name="id" value={r.id} />
+                      <button type="submit" class="btn btn-danger btn-xs" onclick="return confirm('Delete this redirect rule?')">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .redirects-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .field-hint {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-top: 0.25rem;
+  }
+
+  .btn-block {
+    width: 100%;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .redirect-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .source-text {
+    color: var(--color-danger);
+  }
+
+  .arrow {
+    color: var(--color-text-dim);
+  }
+
+  .dest-text {
+    color: var(--color-success);
+    font-weight: 600;
+  }
+
+  .date-text {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 3rem 1.5rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-warning {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid #fef08a;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 900px) {
+    .redirects-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+
+const canonicalUrl = getCanonicalUrl('/privacy');
+---
+
+<BaseLayout
+  seo={{
+    title: 'Privacy Policy',
+    description: 'Privacy policy and data governance practices of ECargyan.',
+    canonicalUrl,
+  }}
+  currentPath="/privacy"
+>
+  <header class="static-header">
+    <div class="container-narrow">
+      <span class="static-kicker">Governance</span>
+      <h1 class="static-title">Privacy Policy</h1>
+      <p class="static-subhead">Effective Date: January 1, 2026</p>
+    </div>
+  </header>
+
+  <main class="container-narrow static-content prose">
+    <h2>1. Overview</h2>
+    <p>
+      {SITE_CONFIG.name} is dedicated to respecting and protecting the privacy of its readers and contributors. This policy outlines how information is handled when visiting our website.
+    </p>
+
+    <h2>2. Information Collection</h2>
+    <p>
+      We do not require user account registration for public readers. Standard server log data (such as IP addresses, browser types, and access timestamps) is processed solely for network diagnostic, security, and edge performance purposes via Cloudflare.
+    </p>
+
+    <h2>3. Cookies & Local Storage</h2>
+    <p>
+      We only use strictly necessary session cookies for authenticated administrators accessing the editorial control panel. We do not deploy third-party advertising tracking cookies or biometric user tracking scripts.
+    </p>
+
+    <h2>4. Changes to Policy</h2>
+    <p>
+      Any updates to our data governance practices will be published directly on this page with a revised effective date.
+    </p>
+  </main>
+</BaseLayout>
+
+<style>
+  .static-header {
+    padding: 4.5rem 0 3rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .static-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .static-title {
+    font-size: 3rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .static-subhead {
+    font-size: 1rem;
+    color: var(--color-text-muted);
+  }
+
+  .static-content {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+</style>

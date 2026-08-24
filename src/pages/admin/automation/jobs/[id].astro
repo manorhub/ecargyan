@@ -1,0 +1,347 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/automation', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/automation', 302);
+
+const job = await dbService.getAutomationJobById(id);
+if (!job) return Astro.redirect('/admin/automation?error=Job+not+found', 302);
+
+function formatDate(ts: number | null): string {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+---
+
+<AdminLayout title={`Job: ${job.id}`} currentPath="/admin/automation">
+  <div class="page-header">
+    <div>
+      <a href="/admin/automation" class="back-link">&larr; Back to Automation Jobs</a>
+      <h1 class="page-title">Automation Job Inspector</h1>
+      <p class="page-description">Execution state, payload target, and structured logs for job {job.id}.</p>
+    </div>
+    <div class="header-actions">
+      {(job.status === 'failed' || job.status === 'dead_letter' || job.status === 'cancelled') && (
+        <form action="/admin/automation/retry" method="POST" style="display:inline;">
+          <input type="hidden" name="id" value={job.id} />
+          <input type="hidden" name="action" value="retry" />
+          <button type="submit" class="btn btn-primary">Retry Job</button>
+        </form>
+      )}
+      {(job.status === 'pending' || job.status === 'queued') && (
+        <form action="/admin/automation/retry" method="POST" style="display:inline;">
+          <input type="hidden" name="id" value={job.id} />
+          <input type="hidden" name="action" value="cancel" />
+          <button type="submit" class="btn btn-danger">Cancel Job</button>
+        </form>
+      )}
+    </div>
+  </div>
+
+  <div class="job-grid">
+    <!-- Left: Job Details & Timeline -->
+    <div class="card">
+      <div class="card-header-row">
+        <h2 class="card-title">Job Details</h2>
+        <span class:list={[
+          'badge',
+          job.status === 'completed' ? 'badge-success' :
+          job.status === 'processing' ? 'badge-warning' :
+          job.status === 'dead_letter' ? 'badge-danger' :
+          job.status === 'failed' ? 'badge-danger' : 'badge-neutral'
+        ]}>
+          {job.status.toUpperCase()}
+        </span>
+      </div>
+
+      <div class="details-list">
+        <div class="detail-row">
+          <span class="detail-label">Job ID:</span>
+          <span class="detail-value mono">{job.id}</span>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-label">Job Type:</span>
+          <span class="detail-value"><span class="task-badge">{job.job_type.toUpperCase()}</span></span>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-label">Target Entity:</span>
+          <span class="detail-value">
+            <strong>{job.entity_name || job.entity_id}</strong>
+            <span class="entity-type">({job.entity_type})</span>
+          </span>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-label">Execution Attempts:</span>
+          <span class="detail-value mono">{job.attempts} / {job.max_attempts}</span>
+        </div>
+
+        <div class="detail-row">
+          <span class="detail-label">Idempotency Key:</span>
+          <span class="detail-value mono">{job.idempotency_key || '—'}</span>
+        </div>
+      </div>
+
+      <h3 class="section-title">Timeline</h3>
+      <div class="timeline-box">
+        <div class="timeline-step">
+          <span class="step-label">Created:</span>
+          <span class="step-time">{formatDate(job.created_at)}</span>
+        </div>
+        <div class="timeline-step">
+          <span class="step-label">Scheduled For:</span>
+          <span class="step-time">{formatDate(job.scheduled_at)}</span>
+        </div>
+        <div class="timeline-step">
+          <span class="step-label">Started:</span>
+          <span class="step-time">{formatDate(job.started_at)}</span>
+        </div>
+        <div class="timeline-step">
+          <span class="step-label">Completed:</span>
+          <span class="step-time">{formatDate(job.completed_at)}</span>
+        </div>
+      </div>
+
+      {job.error_message && (
+        <div class="error-box">
+          <span class="error-title">Failure Diagnostic:</span>
+          <p class="error-text">{job.error_message}</p>
+        </div>
+      )}
+    </div>
+
+    <!-- Right: Execution Logs -->
+    <div class="card">
+      <h2 class="card-title">Execution Event Trail</h2>
+
+      {job.logs.length === 0 ? (
+        <p class="empty-logs">No execution events recorded for this job.</p>
+      ) : (
+        <div class="job-logs-list">
+          {job.logs.map((log: any) => (
+            <div class="job-log-item">
+              <div class="log-meta">
+                <span class="badge badge-neutral">{log.event_type}</span>
+                <span class="log-time">{formatDate(log.created_at)}</span>
+              </div>
+              <p class="log-msg">{log.message}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .job-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.75rem;
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .details-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .detail-label {
+    color: var(--color-text-muted);
+  }
+
+  .detail-value {
+    font-weight: 500;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+  }
+
+  .entity-type {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    margin-left: 0.25rem;
+  }
+
+  .task-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem 0;
+  }
+
+  .timeline-box {
+    background-color: var(--color-surface-subtle);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .timeline-step {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .step-label {
+    color: var(--color-text-dim);
+  }
+
+  .step-time {
+    font-family: var(--font-mono);
+  }
+
+  .error-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background-color: var(--color-danger-bg);
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-sm);
+  }
+
+  .error-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-danger);
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .error-text {
+    font-size: 0.8125rem;
+    color: var(--color-danger);
+    font-family: var(--font-mono);
+    word-break: break-word;
+    margin: 0;
+  }
+
+  .empty-logs {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .job-logs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .job-log-item {
+    padding: 0.875rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .log-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+  }
+
+  .log-time {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+  }
+
+  .log-msg {
+    font-size: 0.8125rem;
+    color: var(--color-text-main);
+    margin: 0;
+  }
+
+  @media (max-width: 900px) {
+    .job-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

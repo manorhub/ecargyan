@@ -1,0 +1,391 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+import { getUniqueSlug } from '../../../lib/db/slug';
+import { validateArticleInput } from '../../../lib/utils/validation';
+import type { ArticleStatus } from '../../../lib/db/schema';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/articles', 302);
+
+let errorMessage = '';
+
+const [categories, authors, tags, mediaList] = await Promise.all([
+  dbService.listCategories(),
+  dbService.listAuthors(),
+  dbService.listTags(),
+  dbService.listMedia(50, 0),
+]);
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const title = (formData.get('title') as string || '').trim();
+    const customSlug = (formData.get('slug') as string || '').trim();
+    const excerpt = (formData.get('excerpt') as string || '').trim();
+    const content = (formData.get('content') as string || '').trim();
+    const status = (formData.get('status') as ArticleStatus || 'draft');
+    const categoryId = (formData.get('category_id') as string || '').trim() || null;
+    const authorId = (formData.get('author_id') as string || '').trim() || null;
+    const featuredImageId = (formData.get('featured_image_id') as string || '').trim() || null;
+    const scheduledAtStr = formData.get('scheduled_at') as string;
+    const scheduledAt = scheduledAtStr ? new Date(scheduledAtStr).getTime() : null;
+
+    const selectedTagIds = formData.getAll('tag_ids') as string[];
+
+    // SEO
+    const metaTitle = (formData.get('meta_title') as string || '').trim() || null;
+    const metaDescription = (formData.get('meta_description') as string || '').trim() || null;
+    const canonicalUrl = (formData.get('canonical_url') as string || '').trim() || null;
+    const ogTitle = (formData.get('og_title') as string || '').trim() || null;
+    const ogDescription = (formData.get('og_description') as string || '').trim() || null;
+
+    const validation = validateArticleInput({ title, content, status, scheduled_at: scheduledAt });
+    if (!validation.valid) {
+      errorMessage = Object.values(validation.errors)[0] || 'Validation error.';
+    } else {
+      const articleId = `art_${Date.now()}`;
+      const slug = customSlug
+        ? await getUniqueSlug(runtimeEnv!.DB, 'articles', customSlug)
+        : await getUniqueSlug(runtimeEnv!.DB, 'articles', title);
+
+      await dbService.createArticle({
+        id: articleId,
+        title,
+        slug,
+        excerpt: excerpt || null,
+        content,
+        status,
+        author_id: authorId,
+        category_id: categoryId,
+        featured_image_id: featuredImageId,
+        scheduled_at: scheduledAt,
+        tagIds: selectedTagIds,
+        seo: {
+          meta_title: metaTitle,
+          meta_description: metaDescription,
+          canonical_url: canonicalUrl,
+          og_title: ogTitle,
+          og_description: ogDescription,
+          og_image_id: featuredImageId,
+        },
+      });
+
+      if (Astro.locals.admin) {
+        await dbService.logAudit(Astro.locals.admin.id, 'create_article', 'article', articleId, { title, slug, status });
+      }
+
+      return Astro.redirect('/admin/articles', 302);
+    }
+  } catch (err) {
+    errorMessage = 'Failed to create article.';
+  }
+}
+---
+
+<AdminLayout title="New Article" currentPath="/admin/articles">
+  <div class="page-header">
+    <a href="/admin/articles" class="back-link">&larr; Back to Articles</a>
+    <h1 class="page-title">Author New Article</h1>
+  </div>
+
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <form method="POST" class="editor-form">
+    <div class="editor-layout">
+      <!-- Main Content Column -->
+      <div class="editor-main">
+        <div class="editor-card">
+          <div class="form-group">
+            <label for="title" class="form-label">Article Title *</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              class="form-input title-input"
+              placeholder="e.g. 2026 Electric Powertrain Benchmark Analysis"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="slug" class="form-label">URL Slug (Optional)</label>
+            <input
+              type="text"
+              id="slug"
+              name="slug"
+              class="form-input"
+              placeholder="Auto-generated from title if left blank"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="excerpt" class="form-label">Article Excerpt / Deck</label>
+            <textarea
+              id="excerpt"
+              name="excerpt"
+              class="form-input"
+              rows="2"
+              placeholder="A concise 1-2 sentence editorial summary..."
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="content" class="form-label">Article Body (Markdown) *</label>
+            <div class="markdown-hints">
+              <span>Supports Markdown: # Headings, **bold**, *italic*, &gt; quotes, `code`, - lists</span>
+            </div>
+            <textarea
+              id="content"
+              name="content"
+              class="form-input content-textarea"
+              rows="16"
+              placeholder="# Introduction&#10;&#10;Write authoritative automotive analysis..."
+              required
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- SEO Metadata Card -->
+        <div class="editor-card">
+          <h2 class="card-title">SEO & OpenGraph Configuration</h2>
+          
+          <div class="form-group">
+            <label for="meta_title" class="form-label">Meta Title</label>
+            <input type="text" id="meta_title" name="meta_title" class="form-input" placeholder="Optimal length: ~50-60 characters" />
+          </div>
+
+          <div class="form-group">
+            <label for="meta_description" class="form-label">Meta Description</label>
+            <textarea id="meta_description" name="meta_description" class="form-input" rows="2" placeholder="Optimal length: ~120-155 characters"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="canonical_url" class="form-label">Canonical URL</label>
+            <input type="url" id="canonical_url" name="canonical_url" class="form-input" placeholder="https://ecargyan.com/article/..." />
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Column -->
+      <div class="editor-sidebar">
+        <!-- Publishing Control -->
+        <div class="sidebar-card">
+          <h2 class="card-title">Publishing Status</h2>
+          
+          <div class="form-group">
+            <label for="status" class="form-label">Workflow Status</label>
+            <select id="status" name="status" class="form-input">
+              <option value="draft" selected>Draft</option>
+              <option value="review">In Review</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="published">Published</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="scheduled_at" class="form-label">Schedule Date</label>
+            <input type="datetime-local" id="scheduled_at" name="scheduled_at" class="form-input" />
+            <span class="field-hint">Applicable if status is Scheduled.</span>
+          </div>
+
+          <div class="form-actions-stack">
+            <button type="submit" class="btn btn-primary btn-block">
+              Save Article
+            </button>
+            <a href="/admin/articles" class="btn btn-secondary btn-block">
+              Cancel
+            </a>
+          </div>
+        </div>
+
+        <!-- Taxonomy -->
+        <div class="sidebar-card">
+          <h2 class="card-title">Classification</h2>
+
+          <div class="form-group">
+            <label for="category_id" class="form-label">Category</label>
+            <select id="category_id" name="category_id" class="form-input">
+              <option value="">— Uncategorized —</option>
+              {categories.map((c) => (
+                <option value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="author_id" class="form-label">Author</label>
+            <select id="author_id" name="author_id" class="form-input">
+              <option value="">— No Author Assigned —</option>
+              {authors.map((a) => (
+                <option value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tags</label>
+            {tags.length === 0 ? (
+              <span class="field-hint">No tags configured yet.</span>
+            ) : (
+              <div class="tags-checklist">
+                {tags.map((t) => (
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="tag_ids" value={t.id} />
+                    <span>{t.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <!-- Featured Media -->
+        <div class="sidebar-card">
+          <h2 class="card-title">Featured Image</h2>
+          <div class="form-group">
+            <label for="featured_image_id" class="form-label">Select Media Asset</label>
+            <select id="featured_image_id" name="featured_image_id" class="form-input">
+              <option value="">— None —</option>
+              {mediaList.map((m) => (
+                <option value={m.id}>{m.filename}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+  }
+
+  .editor-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .editor-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .editor-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .editor-card, .sidebar-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .title-input {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .content-textarea {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  .markdown-hints {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .field-hint {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-top: 0.25rem;
+  }
+
+  .form-actions-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .btn-block {
+    width: 100%;
+    text-align: center;
+  }
+
+  .tags-checklist {
+    max-height: 160px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 960px) {
+    .editor-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

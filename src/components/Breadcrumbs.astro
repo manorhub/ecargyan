@@ -1,0 +1,81 @@
+---
+import type { BreadcrumbItem } from '../lib/seo/types';
+import { generateBreadcrumbSchema } from '../lib/seo/schema';
+
+interface Props {
+  items: BreadcrumbItem[];
+}
+
+const { items } = Astro.props;
+
+// Always prepend Home if not first
+const fullItems: BreadcrumbItem[] = items[0]?.url === '/' ? items : [{ name: 'Home', url: '/' }, ...items];
+
+const schemaJson = JSON.stringify(generateBreadcrumbSchema(fullItems));
+---
+
+<nav class="breadcrumbs-container" aria-label="Breadcrumb">
+  <ol class="breadcrumbs-list">
+    {fullItems.map((item, index) => {
+      const isLast = index === fullItems.length - 1;
+      return (
+        <li class="breadcrumb-item">
+          {isLast ? (
+            <span class="breadcrumb-current" aria-current="page">{item.name}</span>
+          ) : (
+            <a href={item.url} class="breadcrumb-link">{item.name}</a>
+          )}
+          {!isLast && <span class="breadcrumb-separator" aria-hidden="true">/</span>}
+        </li>
+      );
+    })}
+  </ol>
+</nav>
+
+<script type="application/ld+json" is:inline set:html={schemaJson} />
+
+<style>
+  .breadcrumbs-container {
+    margin-bottom: 1.25rem;
+  }
+
+  .breadcrumbs-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .breadcrumb-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .breadcrumb-link {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+
+  .breadcrumb-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .breadcrumb-separator {
+    margin: 0 0.5rem;
+    color: var(--color-text-dim);
+  }
+
+  .breadcrumb-current {
+    color: var(--color-text-main);
+    font-weight: 500;
+    max-width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>

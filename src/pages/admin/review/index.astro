@@ -1,0 +1,299 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+const url = new URL(Astro.request.url);
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 20;
+const offset = (page - 1) * pageSize;
+
+const { articles, total } = await dbService.listReviewArticles(pageSize, offset);
+const totalPages = Math.ceil(total / pageSize) || 1;
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title="Editorial Review Queue" currentPath="/admin/review">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Editorial Review Queue</h1>
+      <p class="page-description">
+        Articles awaiting editorial inspection, factual verification, and publishing sign-off.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/articles/new" class="btn btn-secondary">New Manual Article</a>
+      <a href="/admin/research" class="btn btn-secondary">Open Research Pool</a>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="card-header-row">
+      <h2 class="card-title">Pending Drafts for Review ({total})</h2>
+    </div>
+
+    {articles.length === 0 ? (
+      <div class="empty-box">
+        <span class="check-badge">✓</span>
+        <p class="empty-text">Review queue is empty.</p>
+        <span class="empty-subtext">All generated AI drafts and submitted stories have been approved or published.</span>
+        <div class="empty-actions">
+          <a href="/admin/research" class="btn btn-primary">Generate Drafts from Research</a>
+        </div>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Article Headline</th>
+              <th>Category</th>
+              <th>Author Byline</th>
+              <th>AI Quality</th>
+              <th>Submitted</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {articles.map((art: any) => (
+              <tr>
+                <td>
+                  <a href={`/admin/articles/${art.id}/edit`} class="article-title-link">
+                    {art.title}
+                  </a>
+                  <span class="article-slug">/article/{art.slug}</span>
+                  {art.research_title && (
+                    <span class="provenance-tag">Grounded in: {art.research_title}</span>
+                  )}
+                </td>
+                <td>
+                  {art.category_name ? (
+                    <span class="badge badge-neutral">{art.category_name}</span>
+                  ) : (
+                    <span class="text-dim">—</span>
+                  )}
+                </td>
+                <td>
+                  <span class="author-name">{art.author_name || 'Editorial Team'}</span>
+                </td>
+                <td>
+                  {art.ai_quality_score ? (
+                    <span class:list={[
+                      'badge',
+                      art.ai_quality_score >= 80 ? 'badge-success' : 'badge-warning'
+                    ]}>
+                      {art.ai_quality_score}/100
+                    </span>
+                  ) : (
+                    <span class="badge badge-neutral">Manual</span>
+                  )}
+                </td>
+                <td>
+                  <span class="date-text">{formatDate(art.created_at)}</span>
+                </td>
+                <td class="text-right">
+                  <div class="action-buttons">
+                    <a href={`/admin/articles/${art.id}/edit`} class="btn btn-primary btn-xs">
+                      Review & Publish
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    {totalPages > 1 && (
+      <div class="pagination">
+        {page > 1 && (
+          <a href={`/admin/review?page=${page - 1}`} class="btn btn-secondary btn-sm">
+            &larr; Previous
+          </a>
+        )}
+        <span class="page-info">Page {page} of {totalPages}</span>
+        {page < totalPages && (
+          <a href={`/admin/review?page=${page + 1}`} class="btn btn-secondary btn-sm">
+            Next &rarr;
+          </a>
+        )}
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header-row {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .article-title-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: block;
+  }
+
+  .article-title-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .article-slug {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    display: block;
+  }
+
+  .provenance-tag {
+    font-size: 0.6875rem;
+    color: var(--color-accent-blue);
+    display: block;
+    margin-top: 0.2rem;
+  }
+
+  .author-name {
+    font-size: 0.8125rem;
+  }
+
+  .date-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-dim {
+    color: var(--color-text-dim);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .check-badge {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 0.75rem;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: block;
+    margin-bottom: 1.5rem;
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .page-info {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+</style>

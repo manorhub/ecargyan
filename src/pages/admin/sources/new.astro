@@ -1,0 +1,408 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+import { validateOutboundUrl } from '../../../lib/sources/security';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/sources', 302);
+
+let errorMessage = '';
+const categories = await dbService.listCategories();
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const name = (formData.get('name') as string || '').trim();
+    const baseUrl = (formData.get('base_url') as string || '').trim();
+    const sourceType = (formData.get('source_type') as string || 'rss').trim();
+    const rssUrl = (formData.get('rss_url') as string || '').trim();
+    const description = (formData.get('description') as string || '').trim();
+    const categoryId = (formData.get('category_id') as string || '').trim() || null;
+    const priority = parseInt(formData.get('priority') as string || '1', 10);
+    const fetchInterval = parseInt(formData.get('fetch_interval') as string || '3600', 10);
+    const status = (formData.get('status') as string || 'active').trim();
+
+    if (!name || !baseUrl) {
+      errorMessage = 'Source name and base URL are required.';
+    } else if (sourceType === 'rss' && !rssUrl) {
+      errorMessage = 'RSS Feed URL is required for RSS source type.';
+    } else {
+      const baseCheck = validateOutboundUrl(baseUrl);
+      if (!baseCheck.valid) {
+        errorMessage = `Base URL Error: ${baseCheck.error}`;
+      } else {
+        if (rssUrl) {
+          const rssCheck = validateOutboundUrl(rssUrl);
+          if (!rssCheck.valid) {
+            errorMessage = `RSS URL Error: ${rssCheck.error}`;
+          }
+        }
+
+        if (!errorMessage) {
+          const sourceId = `src_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          await dbService.createSource({
+            id: sourceId,
+            name,
+            base_url: baseUrl,
+            source_type: sourceType,
+            rss_url: rssUrl || null,
+            description: description || null,
+            category_id: categoryId,
+            priority,
+            fetch_interval: fetchInterval,
+            status,
+          });
+
+          if (Astro.locals.admin) {
+            await dbService.logAudit(Astro.locals.admin.id, 'create_source', 'source', sourceId, { name, rssUrl });
+          }
+
+          return Astro.redirect('/admin/sources?success=Source+configured+successfully', 302);
+        }
+      }
+    }
+  } catch (err: any) {
+    errorMessage = err.message || 'Failed to create source.';
+  }
+}
+---
+
+<AdminLayout title="Add Source" currentPath="/admin/sources">
+  <div class="page-header">
+    <a href="/admin/sources" class="back-link">&larr; Back to Sources</a>
+    <h1 class="page-title">Configure Research Source</h1>
+    <p class="page-description">Connect external automotive telemetry, manufacturer pressrooms, or technical RSS feeds.</p>
+  </div>
+
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <div class="form-layout">
+    <form method="POST" class="source-form">
+      <div class="form-card">
+        <h2 class="card-title">Source Credentials</h2>
+
+        <div class="form-group">
+          <label for="name" class="form-label">Source Name *</label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            class="form-input"
+            placeholder="e.g. CleanTechnica EV Wire"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="base_url" class="form-label">Base Publication URL *</label>
+          <input
+            type="url"
+            id="base_url"
+            name="base_url"
+            class="form-input"
+            placeholder="https://cleantechnica.com"
+            required
+          />
+          <span class="field-hint">The primary domain of the research outlet.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="source_type" class="form-label">Ingestion Protocol</label>
+          <select id="source_type" name="source_type" class="form-input">
+            <option value="rss" selected>RSS / Atom Feed</option>
+            <option value="website">Website (Direct Ingestion)</option>
+            <option value="api">API Endpoint</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="rss-group">
+          <label for="rss_url" class="form-label">RSS / Atom Endpoint URL *</label>
+          <div class="test-input-group">
+            <input
+              type="url"
+              id="rss_url"
+              name="rss_url"
+              class="form-input"
+              placeholder="https://cleantechnica.com/feed/"
+            />
+            <button type="button" id="btn-test-feed" class="btn btn-secondary">
+              Test Feed
+            </button>
+          </div>
+          <span class="field-hint">Validated against SSRF safeguards before connection.</span>
+        </div>
+
+        <!-- Live Feed Test Feedback Panel -->
+        <div id="test-feedback" class="test-feedback-box" style="display: none;">
+          <div class="test-spinner" id="test-spinner">Testing feed connection...</div>
+          <div id="test-results" style="display: none;">
+            <div class="test-status-line">
+              <span id="test-badge" class="badge"></span>
+              <span id="test-meta-text" class="test-meta"></span>
+            </div>
+            <div id="test-details-block" class="test-details"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="description" class="form-label">Description / Coverage Focus</label>
+          <textarea
+            id="description"
+            name="description"
+            class="form-input"
+            rows="2"
+            placeholder="Editorial focus: Battery chemistry breakthroughs, charging infrastructure, European market."
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h2 class="card-title">Classification & Pipeline Policy</h2>
+
+        <div class="form-group">
+          <label for="category_id" class="form-label">Default Target Category</label>
+          <select id="category_id" name="category_id" class="form-input">
+            <option value="">— Unclassified —</option>
+            {categories.map((c) => (
+              <option value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <span class="field-hint">Ingested items will be associated with this category topic.</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="priority" class="form-label">Ingestion Priority</label>
+            <select id="priority" name="priority" class="form-input">
+              <option value="3">High (Priority 3)</option>
+              <option value="2">Normal (Priority 2)</option>
+              <option value="1" selected>Standard (Priority 1)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="fetch_interval" class="form-label">Fetch Frequency</label>
+            <select id="fetch_interval" name="fetch_interval" class="form-input">
+              <option value="900">Every 15 minutes</option>
+              <option value="1800">Every 30 minutes</option>
+              <option value="3600" selected>Every 1 hour</option>
+              <option value="10800">Every 3 hours</option>
+              <option value="21600">Every 6 hours</option>
+              <option value="43200">Every 12 hours</option>
+              <option value="86400">Every 24 hours</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="status" class="form-label">Initial Source Status</label>
+          <select id="status" name="status" class="form-input">
+            <option value="active" selected>Active (Ready for Ingestion)</option>
+            <option value="paused">Paused (Do Not Poll)</option>
+          </select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save Source</button>
+          <a href="/admin/sources" class="btn btn-secondary">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+  const testBtn = document.getElementById('btn-test-feed');
+  const rssInput = document.getElementById('rss_url');
+  const feedbackBox = document.getElementById('test-feedback');
+  const spinner = document.getElementById('test-spinner');
+  const resultsBlock = document.getElementById('test-results');
+  const badge = document.getElementById('test-badge');
+  const metaText = document.getElementById('test-meta-text');
+  const detailsBlock = document.getElementById('test-details-block');
+
+  if (testBtn && rssInput) {
+    testBtn.addEventListener('click', async () => {
+      const url = rssInput.value.trim();
+      if (!url) {
+        alert('Please enter an RSS URL to test.');
+        return;
+      }
+
+      feedbackBox.style.display = 'block';
+      spinner.style.display = 'block';
+      resultsBlock.style.display = 'none';
+
+      try {
+        const response = await fetch('/admin/sources/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+
+        const data = await response.json();
+        spinner.style.display = 'none';
+        resultsBlock.style.display = 'block';
+
+        if (data.success) {
+          badge.className = 'badge badge-success';
+          badge.textContent = `Valid Feed (${data.httpStatus} OK)`;
+          metaText.textContent = `${data.responseTimeMs}ms latency • ${data.itemsFound} items discovered`;
+
+          let detailsHtml = `<p><strong>Feed Title:</strong> ${data.feedTitle || 'Untitled'}</p>`;
+          if (data.latestItem) {
+            detailsHtml += `<p><strong>Latest Item:</strong> ${data.latestItem.title}</p>`;
+            if (data.latestItem.publishedAt) {
+              detailsHtml += `<p class="date-hint">Published: ${new Date(data.latestItem.publishedAt).toLocaleString()}</p>`;
+            }
+          }
+          detailsBlock.innerHTML = detailsHtml;
+        } else {
+          badge.className = 'badge badge-danger';
+          badge.textContent = `Test Failed (${data.httpStatus || 500})`;
+          metaText.textContent = `${data.responseTimeMs || 0}ms latency`;
+          detailsBlock.innerHTML = `<p class="error-text">${data.error || 'Connection error'}</p>`;
+        }
+      } catch (err) {
+        spinner.style.display = 'none';
+        resultsBlock.style.display = 'block';
+        badge.className = 'badge badge-danger';
+        badge.textContent = 'Network Error';
+        metaText.textContent = '';
+        detailsBlock.innerHTML = '<p class="error-text">Client network request to test endpoint failed.</p>';
+      }
+    });
+  }
+</script>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-layout {
+    max-width: 720px;
+  }
+
+  .source-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.75rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .field-hint {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-top: 0.25rem;
+  }
+
+  .test-input-group {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .test-feedback-box {
+    margin-top: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 1rem 1.25rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+  }
+
+  .test-status-line {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .test-meta {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .test-details p {
+    margin: 0.25rem 0;
+  }
+
+  .date-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .error-text {
+    color: var(--color-danger);
+    font-weight: 500;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 640px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

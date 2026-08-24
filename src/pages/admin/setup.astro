@@ -1,0 +1,218 @@
+---
+import { getDb } from '../../lib/db/client';
+import { generateSalt, hashPassword } from '../../lib/auth/password';
+import { createSessionToken } from '../../lib/auth/session';
+import { isValidEmail } from '../../lib/utils/security';
+import '../../styles/global.css';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let errorMessage = '';
+
+if (!dbService) {
+  errorMessage = 'Database binding (DB) is not available. Please verify Cloudflare D1 configuration.';
+} else {
+  const adminCount = await dbService.getAdminCount();
+  // Setup is strictly one-time. If an admin already exists, block access.
+  if (adminCount > 0) {
+    return Astro.redirect('/admin/login', 302);
+  }
+}
+
+if (Astro.request.method === 'POST' && dbService) {
+  try {
+    const formData = await Astro.request.formData();
+    const email = (formData.get('email') as string || '').trim();
+    const password = (formData.get('password') as string || '').trim();
+    const confirmPassword = (formData.get('confirm_password') as string || '').trim();
+
+    if (!isValidEmail(email)) {
+      errorMessage = 'Please enter a valid administrator email address.';
+    } else if (password.length < 8) {
+      errorMessage = 'Password must be at least 8 characters long.';
+    } else if (password !== confirmPassword) {
+      errorMessage = 'Passwords do not match.';
+    } else {
+      const salt = generateSalt(16);
+      const hash = await hashPassword(password, salt);
+      const adminId = `admin_${Date.now()}`;
+
+      const admin = await dbService.createAdmin({
+        id: adminId,
+        email,
+        password_hash: hash,
+        password_salt: salt,
+        role: 'superadmin',
+      });
+
+      // Issue signed session
+      const token = await createSessionToken(
+        { adminId: admin.id, email: admin.email, role: admin.role },
+        runtimeEnv?.SESSION_SECRET
+      );
+
+      const isProd = runtimeEnv?.ENVIRONMENT === 'production';
+      Astro.cookies.set('ec_admin_session', token, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+      });
+
+      return Astro.redirect('/admin', 302);
+    }
+  } catch {
+    errorMessage = 'Failed to create administrator account. Please try again.';
+  }
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Initial Admin Setup — ECargyan</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="setup-body">
+    <div class="setup-container">
+      <div class="setup-card">
+        <div class="setup-header">
+          <span class="setup-badge">Phase 1 Initialization</span>
+          <h1 class="setup-title">ECargyan Setup</h1>
+          <p class="setup-subtitle">
+            Create the primary superadmin account. This wizard is automatically locked once created.
+          </p>
+        </div>
+
+        {errorMessage && (
+          <div class="alert alert-danger" role="alert">
+            {errorMessage}
+          </div>
+        )}
+
+        <form method="POST" class="setup-form">
+          <div class="form-group">
+            <label for="email" class="form-label">Administrator Email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              class="form-input"
+              placeholder="admin@ecargyan.com"
+              required
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password" class="form-label">Password (min 8 chars)</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              class="form-input"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="confirm_password" class="form-label">Confirm Password</label>
+            <input
+              type="password"
+              id="confirm_password"
+              name="confirm_password"
+              class="form-input"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">
+            Initialize ECargyan Administrator
+          </button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .setup-body {
+    background-color: var(--color-surface-subtle);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .setup-container {
+    width: 100%;
+    max-width: 440px;
+  }
+
+  .setup-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2.5rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .setup-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .setup-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.2rem 0.5rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .setup-title {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .setup-subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+  }
+</style>

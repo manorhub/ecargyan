@@ -1,0 +1,74 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+
+const canonicalUrl = getCanonicalUrl('/terms');
+---
+
+<BaseLayout
+  seo={{
+    title: 'Terms of Publication & Service',
+    description: 'Terms and conditions governing the use of ECargyan editorial content.',
+    canonicalUrl,
+  }}
+  currentPath="/terms"
+>
+  <header class="static-header">
+    <div class="container-narrow">
+      <span class="static-kicker">Governance</span>
+      <h1 class="static-title">Terms of Service</h1>
+      <p class="static-subhead">Effective Date: January 1, 2026</p>
+    </div>
+  </header>
+
+  <main class="container-narrow static-content prose">
+    <h2>1. Acceptance of Terms</h2>
+    <p>
+      By accessing or reading content on {SITE_CONFIG.name}, you agree to abide by these terms of publication.
+    </p>
+
+    <h2>2. Intellectual Property & Syndication</h2>
+    <p>
+      All original editorial reports, analyses, graphics, and benchmark data published on {SITE_CONFIG.name} are the intellectual property of the publication. Quotation and brief excerpting for journalistic or academic commentary is permitted provided proper attribution and a direct link to the canonical dispatch URL are included.
+    </p>
+
+    <h2>3. Editorial Disclaimer</h2>
+    <p>
+      Technical analyses, market forecasts, and specifications are provided for informational and editorial purposes. While we strive for absolute factual accuracy, vehicle specifications may vary by market and manufacturer revision.
+    </p>
+  </main>
+</BaseLayout>
+
+<style>
+  .static-header {
+    padding: 4.5rem 0 3rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .static-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .static-title {
+    font-size: 3rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .static-subhead {
+    font-size: 1rem;
+    color: var(--color-text-muted);
+  }
+
+  .static-content {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+</style>

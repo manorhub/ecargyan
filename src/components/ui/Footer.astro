@@ -1,0 +1,168 @@
+---
+import { SITE_CONFIG } from '../../lib/config/site';
+import { getDb } from '../../lib/db/client';
+
+const currentYear = new Date().getFullYear();
+const dbService = getDb(Astro.locals.runtime?.env);
+let categories: any[] = [];
+
+if (dbService) {
+  categories = await dbService.getActiveCategoriesWithCounts();
+}
+---
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <!-- Brand Info -->
+    <div class="footer-col brand-col">
+      <span class="footer-brand">{SITE_CONFIG.name}</span>
+      <p class="footer-bio">
+        Authoritative editorial analysis, vehicle architecture benchmarks, and technical intelligence for modern mobility ecosystems.
+      </p>
+      <div class="footer-status">
+        <span class="status-dot"></span>
+        <span>Independent Automotive Dispatch</span>
+      </div>
+    </div>
+
+    <!-- Categories Directory -->
+    {categories.length > 0 && (
+      <div class="footer-col">
+        <h4 class="col-title">Taxonomy</h4>
+        <ul class="col-links">
+          {categories.slice(0, 6).map((c) => (
+            <li>
+              <a href={`/category/${c.slug}`}>{c.name}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    <!-- Publication Info -->
+    <div class="footer-col">
+      <h4 class="col-title">Publication</h4>
+      <ul class="col-links">
+        <li><a href="/about">Editorial Mission</a></li>
+        <li><a href="/contact">Dispatch Desk & Contact</a></li>
+        <li><a href="/rss.xml">RSS Dispatch Feed</a></li>
+        <li><a href="/sitemap.xml">XML Sitemap</a></li>
+        <li><a href="/admin">Admin Access</a></li>
+      </ul>
+    </div>
+
+    <!-- Governance -->
+    <div class="footer-col">
+      <h4 class="col-title">Governance</h4>
+      <ul class="col-links">
+        <li><a href="/privacy">Privacy Policy</a></li>
+        <li><a href="/terms">Terms of Publication</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="container footer-bottom">
+    <p class="copyright">
+      &copy; {currentYear} {SITE_CONFIG.name}. Built on Astro & Cloudflare Edge Runtime.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: auto;
+    border-top: 2px solid var(--color-border);
+    background-color: var(--color-surface);
+    padding: 4rem 0 2.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 3rem;
+    padding-bottom: 3rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .brand-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .footer-brand {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-brand);
+  }
+
+  .footer-bio {
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    max-width: 340px;
+  }
+
+  .footer-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    margin-top: 0.5rem;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--color-success);
+  }
+
+  .col-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-main);
+    margin-bottom: 1rem;
+  }
+
+  .col-links {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .col-links a {
+    color: var(--color-text-muted);
+  }
+
+  .col-links a:hover {
+    color: var(--color-brand);
+  }
+
+  .footer-bottom {
+    padding-top: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--color-text-dim);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 860px) {
+    .footer-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .footer-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

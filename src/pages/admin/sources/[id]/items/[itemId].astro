@@ -1,0 +1,300 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db/client';
+
+const { id: sourceId, itemId } = Astro.params;
+if (!sourceId || !itemId) return Astro.redirect('/admin/sources', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/sources', 302);
+
+const item = await dbService.getSourceItemById(itemId);
+if (!item) return Astro.redirect(`/admin/sources/${sourceId}`, 302);
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Unspecified';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title={`Item: ${item.title}`} currentPath="/admin/sources">
+  <div class="page-header">
+    <a href={`/admin/sources/${sourceId}`} class="back-link">&larr; Back to {item.source_name || 'Source'}</a>
+    <h1 class="page-title">{item.title}</h1>
+    <div class="provenance-banner">
+      <span class="badge badge-warning">Raw Ingestion Record</span>
+      <span>This is external research material from <strong>{item.source_name}</strong>. It is stored in D1 for editorial intelligence and is NOT published as an ECargyan article.</span>
+    </div>
+  </div>
+
+  <div class="inspector-layout">
+    <!-- Main Content Area -->
+    <div class="inspector-main">
+      <div class="inspector-card">
+        <h2 class="card-title">Extracted Research Content</h2>
+        {item.description && (
+          <div class="content-section">
+            <span class="section-label">Feed Summary / Deck:</span>
+            <div class="feed-deck">{item.description}</div>
+          </div>
+        )}
+
+        <div class="content-section">
+          <span class="section-label">Extracted Body Text:</span>
+          {item.content ? (
+            <div class="extracted-prose" set:html={item.content} />
+          ) : (
+            <div class="empty-content-box">
+              <p>Feed provided metadata only without full body text.</p>
+              <a href={item.url} target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
+                View Original Article at Source &nearr;
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {item.metadata && (
+        <div class="inspector-card">
+          <h2 class="card-title">Feed Enclosure & Metadata</h2>
+          <pre class="metadata-pre">{JSON.stringify(JSON.parse(item.metadata), null, 2)}</pre>
+        </div>
+      )}
+    </div>
+
+    <!-- Metadata Sidebar -->
+    <div class="inspector-sidebar">
+      <div class="sidebar-card">
+        <h2 class="card-title">Provenance & Signatures</h2>
+
+        <dl class="inspector-dl">
+          <div>
+            <dt>Pipeline Status</dt>
+            <dd>
+              <span class:list={[
+                'badge',
+                item.status === 'new' ? 'badge-success' :
+                item.status === 'processed' ? 'badge-neutral' : 'badge-warning'
+              ]}>
+                {item.status.toUpperCase()}
+              </span>
+            </dd>
+          </div>
+
+          <div>
+            <dt>Source Outlet</dt>
+            <dd>
+              <a href={`/admin/sources/${sourceId}`}>{item.source_name}</a>
+            </dd>
+          </div>
+
+          <div>
+            <dt>External Author</dt>
+            <dd>{item.author || '—'}</dd>
+          </div>
+
+          <div>
+            <dt>Original Publication Date</dt>
+            <dd>{formatDate(item.published_at)}</dd>
+          </div>
+
+          <div>
+            <dt>First Ingested</dt>
+            <dd>{formatDate(item.first_seen_at)}</dd>
+          </div>
+
+          <div>
+            <dt>Last Observed in Feed</dt>
+            <dd>{formatDate(item.last_seen_at)}</dd>
+          </div>
+
+          <div>
+            <dt>Canonical URL</dt>
+            <dd class="url-dd">
+              <a href={item.canonical_url} target="_blank" rel="noopener noreferrer">
+                {item.canonical_url} &nearr;
+              </a>
+            </dd>
+          </div>
+
+          {item.external_id && (
+            <div>
+              <dt>External Feed GUID</dt>
+              <dd><code>{item.external_id}</code></dd>
+            </div>
+          )}
+
+          <div>
+            <dt>SHA-256 Content Hash</dt>
+            <dd><code class="hash-code">{item.content_hash}</code></dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 1rem;
+  }
+
+  .provenance-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .inspector-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .inspector-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .inspector-card, .sidebar-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .content-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .content-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .section-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .feed-deck {
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    padding: 1rem;
+    background-color: var(--color-surface-subtle);
+    border-radius: var(--radius-sm);
+  }
+
+  .extracted-prose {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+  }
+
+  .empty-content-box {
+    padding: 2rem;
+    text-align: center;
+    background-color: var(--color-surface-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-content-box p {
+    margin-bottom: 1rem;
+  }
+
+  .metadata-pre {
+    background-color: var(--color-surface-subtle);
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    overflow-x: auto;
+  }
+
+  .inspector-dl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+    font-size: 0.8125rem;
+  }
+
+  .inspector-dl dt {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+    margin-bottom: 0.15rem;
+  }
+
+  .inspector-dl dd {
+    margin-left: 0;
+    color: var(--color-text-main);
+  }
+
+  .url-dd a {
+    word-break: break-all;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .hash-code {
+    font-size: 0.6875rem;
+    word-break: break-all;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  @media (max-width: 900px) {
+    .inspector-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

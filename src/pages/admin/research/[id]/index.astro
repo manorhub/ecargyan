@@ -1,0 +1,494 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+import { calculateFreshness } from '../../../../lib/processing/classifier';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/research', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/research', 302);
+
+const item = await dbService.getResearchItemById(id);
+if (!item) return Astro.redirect('/admin/research', 302);
+
+const topics = await dbService.listTopics();
+
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+// Handle topic update form submission
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('action') as string;
+
+  if (action === 'update_topic') {
+    const topicId = (formData.get('topic_id') as string || '').trim() || null;
+    await dbService.updateResearchTopic(id, topicId);
+    return Astro.redirect(`/admin/research/${id}?success=Topic+updated`, 302);
+  }
+}
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Unspecified';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+const freshness = calculateFreshness(item.first_seen_at);
+---
+
+<AdminLayout title={`Research: ${item.title}`} currentPath="/admin/research">
+  <div class="page-header">
+    <div>
+      <a href="/admin/research" class="back-link">&larr; Back to Research Pool</a>
+      <h1 class="page-title">{item.title}</h1>
+      <div class="provenance-banner">
+        <span class="badge badge-success">Research Record</span>
+        <span>Compiled from <strong>{item.source_count} {item.source_count === 1 ? 'source' : 'independent sources'}</strong>. Ready for AI editorial synthesis in Phase 6.</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href={`/admin/research/${item.id}/generate`} class="btn btn-primary">
+        Generate Article Draft
+      </a>
+      <form action="/admin/research/reprocess" method="POST" style="display:inline;">
+        <input type="hidden" name="id" value={item.id} />
+        <button type="submit" class="btn btn-secondary">Reprocess</button>
+      </form>
+      {item.status !== 'ignored' ? (
+        <form action="/admin/research/ignore" method="POST" style="display:inline;">
+          <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="status" value="ignored" />
+          <input type="hidden" name="return_to" value={`/admin/research/${item.id}`} />
+          <button type="submit" class="btn btn-secondary">Mark Ignored</button>
+        </form>
+      ) : (
+        <form action="/admin/research/ignore" method="POST" style="display:inline;">
+          <input type="hidden" name="id" value={item.id} />
+          <input type="hidden" name="status" value="ready" />
+          <input type="hidden" name="return_to" value={`/admin/research/${item.id}`} />
+          <button type="submit" class="btn btn-primary">Restore to Ready</button>
+        </form>
+      )}
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Telemetry Bar -->
+  <div class="meta-strip">
+    <div class="meta-pill">
+      <span class="meta-label">Status</span>
+      <span class="badge badge-success">{item.status.toUpperCase()}</span>
+    </div>
+    <div class="meta-pill">
+      <span class="meta-label">Classification</span>
+      <span class="type-badge">{item.content_type.toUpperCase()}</span>
+    </div>
+    <div class="meta-pill">
+      <span class="meta-label">Importance</span>
+      <strong>{item.importance} / 100</strong>
+    </div>
+    <div class="meta-pill">
+      <span class="meta-label">Freshness</span>
+      <span class="freshness-tag">{freshness.toUpperCase()}</span>
+    </div>
+    <div class="meta-pill">
+      <span class="meta-label">First Seen</span>
+      <span>{formatDate(item.first_seen_at)}</span>
+    </div>
+  </div>
+
+  <div class="research-grid">
+    <!-- Main Content & Multi-Source Comparison -->
+    <div class="main-column">
+      {item.summary && (
+        <div class="card summary-card">
+          <h2 class="card-title">Editorial Intelligence Summary</h2>
+          <p class="summary-text">{item.summary}</p>
+        </div>
+      )}
+
+      <!-- Multi-Source Comparison Matrix -->
+      <div class="card sources-matrix-card">
+        <div class="card-header-row">
+          <h2 class="card-title">Cross-Source Provenance Matrix ({item.source_count})</h2>
+          <span class="provenance-sub">All independent articles reporting this development</span>
+        </div>
+
+        <div class="sources-list">
+          {item.sources.map((src: any, index: number) => (
+            <div class="source-item-card">
+              <div class="source-card-top">
+                <span class="source-index">Source #{index + 1}: {src.source_name}</span>
+                <a href={src.source_url} target="_blank" rel="noopener noreferrer" class="source-ext-link">
+                  Open Original Article &nearr;
+                </a>
+              </div>
+              <h3 class="source-item-title">{src.item_title}</h3>
+              <div class="source-card-meta">
+                <span>Published: {formatDate(src.published_at)}</span>
+                {src.item_author && <span>Author: {src.item_author}</span>}
+              </div>
+              {src.item_description && (
+                <p class="source-card-desc">{src.item_description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Normalized Clean Content -->
+      <div class="card content-card">
+        <h2 class="card-title">Normalized Body Text</h2>
+        <div class="prose-content" set:html={item.normalized_content} />
+      </div>
+    </div>
+
+    <!-- Sidebar Facts & Topic Assignment -->
+    <div class="sidebar-column">
+      <!-- Topic Assignment Card -->
+      <div class="card">
+        <h2 class="card-title">Topic Classification</h2>
+        <form method="POST" class="topic-form">
+          <input type="hidden" name="action" value="update_topic" />
+          <div class="form-group">
+            <select name="topic_id" class="form-input">
+              <option value="">— Unassigned Topic —</option>
+              {topics.map((t: any) => (
+                <option value={t.id} selected={item.topic_id === t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm" style="width:100%;">
+            Update Topic
+          </button>
+        </form>
+      </div>
+
+      <!-- Extracted Structured Facts -->
+      <div class="card facts-card">
+        <h2 class="card-title">Extracted Facts ({item.facts.length})</h2>
+        {item.facts.length === 0 ? (
+          <p class="empty-facts">No specific automotive metrics detected.</p>
+        ) : (
+          <ul class="facts-list">
+            {item.facts.map((f: any) => (
+              <li class="fact-item">
+                <span class="fact-bullet">•</span>
+                <span class="fact-text">{f.fact}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <!-- Technical Hash Signature -->
+      <div class="card">
+        <h2 class="card-title">Technical Signature</h2>
+        <dl class="meta-dl">
+          <div>
+            <dt>Research ID</dt>
+            <dd><code>{item.id}</code></dd>
+          </div>
+          <div>
+            <dt>SHA-256 Signature</dt>
+            <dd><code class="hash-code">{item.content_hash}</code></dd>
+          </div>
+          <div>
+            <dt>Last Re-evaluated</dt>
+            <dd>{formatDate(item.last_updated_at)}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 0.75rem;
+  }
+
+  .provenance-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .meta-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .meta-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .meta-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+  }
+
+  .type-badge, .freshness-tag {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .research-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .main-column, .sidebar-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-header-row .card-title {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .provenance-sub {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .summary-text {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--color-text-main);
+  }
+
+  .sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .source-item-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+  }
+
+  .source-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+  }
+
+  .source-index {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-brand-accent);
+  }
+
+  .source-ext-link {
+    font-size: 0.75rem;
+    color: var(--color-accent-blue);
+  }
+
+  .source-item-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+    color: var(--color-text-main);
+  }
+
+  .source-card-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .source-card-desc {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  .prose-content {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+  }
+
+  .topic-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .facts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .fact-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .fact-bullet {
+    color: var(--color-brand-accent);
+    font-weight: bold;
+  }
+
+  .fact-text {
+    color: var(--color-text-main);
+  }
+
+  .empty-facts {
+    font-size: 0.8125rem;
+    color: var(--color-text-dim);
+  }
+
+  .meta-dl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .meta-dl dt {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+  }
+
+  .meta-dl dd {
+    margin-left: 0;
+  }
+
+  .hash-code {
+    font-size: 0.6875rem;
+    word-break: break-all;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 900px) {
+    .research-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

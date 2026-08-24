@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  seo={{
+    title: '404 — Page Not Found',
+    description: 'The requested document or editorial entry could not be located.',
+    noindex: true,
+  }}
+>
+  <div class="error-wrapper">
+    <div class="container-narrow error-content">
+      <span class="error-code">404</span>
+      <h1 class="error-title">Page Not Found</h1>
+      <p class="error-message">
+        The requested URL or editorial resource does not exist on this server or has been relocated.
+      </p>
+      <div class="error-actions">
+        <a href="/" class="btn btn-primary">Return to Homepage</a>
+        <a href="/admin" class="btn btn-secondary">Admin Console</a>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .error-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 0;
+  }
+
+  .error-content {
+    text-align: center;
+  }
+
+  .error-code {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--color-text-dim);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .error-title {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .error-message {
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    max-width: 440px;
+    margin: 0 auto 2rem;
+  }
+
+  .error-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+</style>

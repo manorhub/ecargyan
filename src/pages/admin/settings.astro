@@ -1,0 +1,170 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getDb } from '../../lib/db/client';
+import { SITE_CONFIG } from '../../lib/config/site';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let successMessage = '';
+let errorMessage = '';
+
+let siteName = SITE_CONFIG.name;
+let siteTagline = SITE_CONFIG.tagline;
+let contactEmail = '';
+
+if (dbService) {
+  if (Astro.request.method === 'POST') {
+    try {
+      const formData = await Astro.request.formData();
+      siteName = (formData.get('site_name') as string || SITE_CONFIG.name).trim();
+      siteTagline = (formData.get('site_tagline') as string || SITE_CONFIG.tagline).trim();
+      contactEmail = (formData.get('contact_email') as string || '').trim();
+
+      await dbService.setSetting('site_name', siteName);
+      await dbService.setSetting('site_tagline', siteTagline);
+      await dbService.setSetting('contact_email', contactEmail);
+
+      successMessage = 'Site settings updated successfully.';
+    } catch {
+      errorMessage = 'Failed to update settings in D1 database.';
+    }
+  } else {
+    try {
+      const settings = await dbService.getAllSettings();
+      if (settings.site_name) siteName = settings.site_name;
+      if (settings.site_tagline) siteTagline = settings.site_tagline;
+      if (settings.contact_email) contactEmail = settings.contact_email;
+    } catch {
+      errorMessage = 'Could not load existing settings from database.';
+    }
+  }
+}
+---
+
+<AdminLayout title="Site Settings" currentPath="/admin/settings">
+  <div class="settings-header">
+    <h1 class="page-title">Platform Configuration</h1>
+    <p class="page-description">
+      Manage foundational parameters stored in Cloudflare D1.
+    </p>
+  </div>
+
+  {successMessage && (
+    <div class="alert alert-success" role="alert">
+      {successMessage}
+    </div>
+  )}
+
+  {errorMessage && (
+    <div class="alert alert-danger" role="alert">
+      {errorMessage}
+    </div>
+  )}
+
+  <div class="settings-card">
+    <form method="POST" class="settings-form">
+      <div class="form-group">
+        <label for="site_name" class="form-label">Publication Name</label>
+        <input
+          type="text"
+          id="site_name"
+          name="site_name"
+          class="form-input"
+          value={siteName}
+          required
+        />
+        <span class="field-help">Displayed in navigation masthead and SEO titles.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="site_tagline" class="form-label">Publication Tagline</label>
+        <input
+          type="text"
+          id="site_tagline"
+          name="site_tagline"
+          class="form-input"
+          value={siteTagline}
+          required
+        />
+        <span class="field-help">Editorial subtitle displayed beneath the masthead.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="contact_email" class="form-label">Editorial Contact Email</label>
+        <input
+          type="email"
+          id="contact_email"
+          name="contact_email"
+          class="form-input"
+          value={contactEmail}
+          placeholder="editor@ecargyan.com"
+        />
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          Save Settings
+        </button>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<style>
+  .settings-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .settings-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    max-width: 680px;
+  }
+
+  .field-help {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.35rem;
+  }
+
+  .form-actions {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    max-width: 680px;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

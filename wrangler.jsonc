@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecargyan-com",
+  "main": "./dist/_worker.js/index.js",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ecargyan-db",
+      "database_id": "04cb96c1-1a5c-4b30-854c-1f584baf9f2e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "ecargyan-media"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
+  "triggers": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  }
+}

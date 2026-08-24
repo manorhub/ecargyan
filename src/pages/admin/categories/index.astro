@@ -1,0 +1,333 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+import { getUniqueSlug } from '../../../lib/db/slug';
+import { validateCategoryInput } from '../../../lib/utils/validation';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let successMessage = '';
+let errorMessage = '';
+
+if (Astro.request.method === 'POST' && dbService) {
+  try {
+    const formData = await Astro.request.formData();
+    const name = (formData.get('name') as string || '').trim();
+    const customSlug = (formData.get('slug') as string || '').trim();
+    const description = (formData.get('description') as string || '').trim();
+    const status = (formData.get('status') as string || 'active') === 'inactive' ? 'inactive' : 'active';
+    const sortOrder = parseInt(formData.get('sort_order') as string || '0', 10) || 0;
+
+    const validation = validateCategoryInput({ name });
+    if (!validation.valid) {
+      errorMessage = validation.errors.name || 'Validation error.';
+    } else {
+      const categoryId = `cat_${Date.now()}`;
+      const slug = customSlug
+        ? await getUniqueSlug(runtimeEnv!.DB, 'categories', customSlug)
+        : await getUniqueSlug(runtimeEnv!.DB, 'categories', name);
+
+      await dbService.createCategory({
+        id: categoryId,
+        name,
+        slug,
+        description: description || null,
+        status,
+        sort_order: sortOrder,
+      });
+
+      if (Astro.locals.admin) {
+        await dbService.logAudit(Astro.locals.admin.id, 'create_category', 'category', categoryId, { name, slug });
+      }
+
+      successMessage = `Category "${name}" created successfully.`;
+    }
+  } catch (err) {
+    errorMessage = 'Failed to create category.';
+  }
+}
+
+const categories = dbService ? await dbService.listCategories() : [];
+---
+
+<AdminLayout title="Categories" currentPath="/admin/categories">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Categories & Taxonomy</h1>
+      <p class="page-description">
+        Manage automotive taxonomy clusters and article classifications.
+      </p>
+    </div>
+  </div>
+
+  {successMessage && (
+    <div class="alert alert-success" role="alert">{successMessage}</div>
+  )}
+
+  {errorMessage && (
+    <div class="alert alert-danger" role="alert">{errorMessage}</div>
+  )}
+
+  <div class="categories-layout">
+    <div class="table-card">
+      <div class="card-header">
+        <h2 class="card-title">Existing Categories ({categories.length})</h2>
+      </div>
+
+      {categories.length === 0 ? (
+        <div class="empty-box">
+          <p class="empty-text">No categories yet.</p>
+          <span class="empty-subtext">Use the form on the right to create your first category.</span>
+        </div>
+      ) : (
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Articles</th>
+                <th>Status</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((cat) => (
+                <tr>
+                  <td>
+                    <strong>{cat.name}</strong>
+                    {cat.description && <p class="cell-subtext">{cat.description}</p>}
+                  </td>
+                  <td><code class="slug-code">/{cat.slug}</code></td>
+                  <td>
+                    <span class="badge badge-neutral">{cat.article_count ?? 0}</span>
+                  </td>
+                  <td>
+                    <span class:list={['badge', cat.status === 'active' ? 'badge-success' : 'badge-neutral']}>
+                      {cat.status}
+                    </span>
+                  </td>
+                  <td class="text-right">
+                    <div class="actions-group">
+                      <a href={`/admin/categories/${cat.id}/edit`} class="btn btn-secondary btn-xs">
+                        Edit
+                      </a>
+                      <form action="/admin/categories/delete" method="POST" onsubmit="return confirm('Delete this category? Associated articles will be unassigned but not deleted.');">
+                        <input type="hidden" name="id" value={cat.id} />
+                        <button type="submit" class="btn btn-danger btn-xs">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+    <div class="form-card">
+      <div class="card-header">
+        <h2 class="card-title">Create Category</h2>
+      </div>
+      <form method="POST" class="category-form">
+        <div class="form-group">
+          <label for="name" class="form-label">Category Name *</label>
+          <input type="text" id="name" name="name" class="form-input" placeholder="e.g. Electric Vehicles" required />
+        </div>
+
+        <div class="form-group">
+          <label for="slug" class="form-label">Custom Slug (Optional)</label>
+          <input type="text" id="slug" name="slug" class="form-input" placeholder="auto-generated from name" />
+        </div>
+
+        <div class="form-group">
+          <label for="description" class="form-label">Description</label>
+          <textarea id="description" name="description" class="form-input form-textarea" rows="3" placeholder="Editorial scope for this category..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="status" class="form-label">Status</label>
+            <select id="status" name="status" class="form-input">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="sort_order" class="form-label">Sort Order</label>
+            <input type="number" id="sort_order" name="sort_order" class="form-input" value="0" />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          Create Category
+        </button>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .categories-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .table-card, .form-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .category-form {
+    padding: 1.5rem;
+  }
+
+  .form-textarea {
+    resize: vertical;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .flex-1 {
+    flex: 1;
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  .empty-box {
+    padding: 3.5rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .admin-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .cell-subtext {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  .slug-code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    background-color: var(--color-surface-subtle);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-brand-accent);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .actions-group {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 900px) {
+    .categories-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

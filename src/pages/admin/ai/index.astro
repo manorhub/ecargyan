@@ -1,0 +1,354 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get('status') || '';
+const taskFilter = url.searchParams.get('task') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 20;
+const offset = (page - 1) * pageSize;
+
+let runsData = { runs: [] as any[], total: 0 };
+
+if (dbService) {
+  runsData = await dbService.listAiRuns({
+    status: statusFilter || undefined,
+    taskType: taskFilter || undefined,
+    limit: pageSize,
+    offset,
+  });
+}
+
+const totalPages = Math.ceil(runsData.total / pageSize) || 1;
+
+function formatDate(ts: number | null): string {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getQualityBadge(score: number | null): { label: string; class: string } {
+  if (score === null || score === undefined) return { label: '—', class: 'badge-neutral' };
+  if (score >= 80) return { label: `${score}/100`, class: 'badge-success' };
+  if (score >= 60) return { label: `${score}/100`, class: 'badge-warning' };
+  return { label: `${score}/100`, class: 'badge-danger' };
+}
+---
+
+<AdminLayout title="AI Editorial Engine" currentPath="/admin/ai">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">DeepSeek AI Editorial Engine</h1>
+      <p class="page-description">
+        Audit log, token consumption, and quality evaluations for DeepSeek-powered article synthesis.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/settings/ai" class="btn btn-secondary">AI Settings</a>
+      <a href="/admin/research" class="btn btn-primary">Open Research Pool</a>
+    </div>
+  </div>
+
+  <div class="filter-panel">
+    <form method="GET" class="filter-form">
+      <div class="filter-group">
+        <select name="status" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Statuses</option>
+          <option value="completed" selected={statusFilter === 'completed'}>Completed</option>
+          <option value="running" selected={statusFilter === 'running'}>Running</option>
+          <option value="failed" selected={statusFilter === 'failed'}>Failed</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <select name="task" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Task Types</option>
+          <option value="planner" selected={taskFilter === 'planner'}>Planner</option>
+          <option value="writer" selected={taskFilter === 'writer'}>Writer</option>
+          <option value="seo" selected={taskFilter === 'seo'}>SEO Generator</option>
+          <option value="quality" selected={taskFilter === 'quality'}>Quality Auditor</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+      {(statusFilter || taskFilter) && (
+        <a href="/admin/ai" class="btn btn-secondary btn-sm">Reset</a>
+      )}
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">AI Execution Runs ({runsData.total})</h2>
+    </div>
+
+    {runsData.runs.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No AI runs yet.</p>
+        <span class="empty-subtext">Generate your first article draft from the Research Pool using the DeepSeek editorial workspace.</span>
+        <div class="empty-action">
+          <a href="/admin/research" class="btn btn-secondary">Go to Research Pool</a>
+        </div>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Run ID / Target</th>
+              <th>Task</th>
+              <th>Model</th>
+              <th>Tokens (In / Out)</th>
+              <th>Duration</th>
+              <th>Quality</th>
+              <th>Status</th>
+              <th>Executed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runsData.runs.map((run) => {
+              const quality = getQualityBadge(run.quality_score);
+              return (
+                <tr>
+                  <td>
+                    <span class="run-id-text">{run.id}</span>
+                    {run.article_title ? (
+                      <a href={`/admin/articles`} class="target-link">
+                        Article: {run.article_title}
+                      </a>
+                    ) : run.research_title ? (
+                      <span class="target-text">Research: {run.research_title}</span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <span class="task-badge">{run.task_type.toUpperCase()}</span>
+                  </td>
+                  <td>
+                    <span class="model-text">{run.model}</span>
+                  </td>
+                  <td>
+                    <span class="tokens-text">
+                      {run.input_tokens.toLocaleString()} / {run.output_tokens.toLocaleString()}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="duration-text">{run.duration_ms}ms</span>
+                  </td>
+                  <td>
+                    <span class:list={['badge', quality.class]}>{quality.label}</span>
+                  </td>
+                  <td>
+                    <span class:list={[
+                      'badge',
+                      run.status === 'completed' ? 'badge-success' :
+                      run.status === 'running' ? 'badge-warning' : 'badge-danger'
+                    ]}>
+                      {run.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="date-text">{formatDate(run.created_at)}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    {totalPages > 1 && (
+      <div class="pagination">
+        {page > 1 && (
+          <a href={`?page=${page - 1}&status=${statusFilter}&task=${taskFilter}`} class="btn btn-secondary btn-sm">
+            &larr; Previous
+          </a>
+        )}
+        <span class="page-info">Page {page} of {totalPages}</span>
+        {page < totalPages && (
+          <a href={`?page=${page + 1}&status=${statusFilter}&task=${taskFilter}`} class="btn btn-secondary btn-sm">
+            Next &rarr;
+          </a>
+        )}
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .filter-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .filter-select {
+    width: auto;
+    min-width: 140px;
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .run-id-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    display: block;
+  }
+
+  .target-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: block;
+    font-size: 0.8125rem;
+  }
+
+  .target-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .target-text {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: block;
+  }
+
+  .task-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .model-text, .tokens-text, .duration-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .date-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-action {
+    margin-top: 1.5rem;
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .page-info {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+</style>

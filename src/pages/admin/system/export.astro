@@ -1,0 +1,120 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+---
+
+<AdminLayout title="Structured Data Export" currentPath="/admin/system/export">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Structured Data Export</h1>
+      <p class="page-description">Export sanitized JSON snapshots of editorial articles, source configurations, and AI telemetry.</p>
+    </div>
+  </div>
+
+  <div class="export-cards-grid">
+    <!-- Articles Export -->
+    <div class="card">
+      <div class="card-icon">📄</div>
+      <h2 class="card-title">Articles & Content</h2>
+      <p class="card-desc">
+        Complete export of all published, review, and draft articles including titles, full markdown content, categories, authors, and SEO metadata.
+      </p>
+      <div class="card-actions">
+        <a href="/admin/system/export/download?type=articles" download="ecargyan_articles.json" class="btn btn-primary">
+          Export Articles JSON
+        </a>
+      </div>
+    </div>
+
+    <!-- Sources Export -->
+    <div class="card">
+      <div class="card-icon">📡</div>
+      <h2 class="card-title">Sources Registry</h2>
+      <p class="card-desc">
+        Configured automotive RSS/Atom feeds, scraping targets, fetch intervals, priorities, and active status rules.
+      </p>
+      <div class="card-actions">
+        <a href="/admin/system/export/download?type=sources" download="ecargyan_sources.json" class="btn btn-primary">
+          Export Sources JSON
+        </a>
+      </div>
+    </div>
+
+    <!-- AI Telemetry Export -->
+    <div class="card">
+      <div class="card-icon">🤖</div>
+      <h2 class="card-title">AI Runs Telemetry</h2>
+      <p class="card-desc">
+        Recent DeepSeek generation history, task types, prompt versions, quality scores, duration, and token usage metrics.
+      </p>
+      <div class="card-actions">
+        <a href="/admin/system/export/download?type=ai_runs" download="ecargyan_ai_runs.json" class="btn btn-primary">
+          Export AI Telemetry JSON
+        </a>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .export-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .card-icon {
+    font-size: 2rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .card-desc {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    flex: 1;
+  }
+
+  .card-actions {
+    margin-top: 1rem;
+  }
+
+  @media (max-width: 900px) {
+    .export-cards-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

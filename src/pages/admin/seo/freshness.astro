@@ -1,0 +1,289 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get('status') || 'pending';
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+const reviews = await dbService.listFreshnessReviews(statusFilter === 'all' ? undefined : statusFilter);
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title="Content Freshness Reviews" currentPath="/admin/seo">
+  <div class="page-header">
+    <div>
+      <a href="/admin/seo" class="back-link">&larr; Back to SEO Overview</a>
+      <h1 class="page-title">Content Freshness & Story Updates</h1>
+      <p class="page-description">
+        Editorial review tasks triggered when new multi-source reporting is ingested for existing published stories.
+      </p>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <div class="filter-panel">
+    <form method="GET" class="filter-form">
+      <div class="filter-group">
+        <select name="status" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="pending" selected={statusFilter === 'pending'}>Pending Reviews</option>
+          <option value="reviewed" selected={statusFilter === 'reviewed'}>Reviewed / Updated</option>
+          <option value="dismissed" selected={statusFilter === 'dismissed'}>Dismissed</option>
+          <option value="all" selected={statusFilter === 'all'}>All Reviews</option>
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Freshness Review Queue ({reviews.length})</h2>
+    </div>
+
+    {reviews.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No pending freshness reviews.</p>
+        <span class="empty-subtext">When new research items match topics of published articles, review tasks will appear here.</span>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Published Article</th>
+              <th>Trigger Reason / Research Item</th>
+              <th>Status</th>
+              <th>Detected</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reviews.map((rev) => (
+              <tr>
+                <td>
+                  <a href={`/admin/articles/${rev.article_id}/edit`} class="article-link">
+                    {rev.article_title || rev.article_id}
+                  </a>
+                  <span class="article-slug">/article/{rev.article_slug}</span>
+                </td>
+                <td>
+                  <span class="reason-text">{rev.reason}</span>
+                  {rev.research_title && (
+                    <span class="research-title-text">Source: {rev.research_title}</span>
+                  )}
+                </td>
+                <td>
+                  <span class:list={[
+                    'badge',
+                    rev.status === 'pending' ? 'badge-warning' :
+                    rev.status === 'reviewed' ? 'badge-success' : 'badge-neutral'
+                  ]}>
+                    {rev.status.toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <span class="date-text">{formatDate(rev.created_at)}</span>
+                </td>
+                <td class="text-right">
+                  {rev.status === 'pending' && (
+                    <div class="action-buttons">
+                      <a href={`/admin/articles/${rev.article_id}/edit`} class="btn btn-secondary btn-xs">
+                        Edit Article
+                      </a>
+                      <form action="/admin/seo/freshness/resolve" method="POST" style="display:inline;">
+                        <input type="hidden" name="id" value={rev.id} />
+                        <input type="hidden" name="status" value="reviewed" />
+                        <button type="submit" class="btn btn-primary btn-xs">
+                          Mark Reviewed
+                        </button>
+                      </form>
+                      <form action="/admin/seo/freshness/resolve" method="POST" style="display:inline;">
+                        <input type="hidden" name="id" value={rev.id} />
+                        <input type="hidden" name="status" value="dismissed" />
+                        <button type="submit" class="btn btn-secondary btn-xs">
+                          Dismiss
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .filter-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-select {
+    width: auto;
+    min-width: 180px;
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .article-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: block;
+  }
+
+  .article-slug {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+  }
+
+  .reason-text {
+    font-size: 0.8125rem;
+    display: block;
+  }
+
+  .research-title-text {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    display: block;
+    margin-top: 0.2rem;
+  }
+
+  .date-text {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 3.5rem 1.5rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

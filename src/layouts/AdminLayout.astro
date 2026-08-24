@@ -1,0 +1,80 @@
+---
+import AdminNav from '../components/admin/AdminNav.astro';
+import AdminHeader from '../components/admin/AdminHeader.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  currentPath?: string;
+}
+
+const { title, currentPath = '/admin' } = Astro.props;
+const admin = Astro.locals.admin;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} — ECargyan Control Panel</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="admin-body">
+    <div class="admin-shell">
+      <AdminNav currentPath={currentPath} />
+      <div class="admin-main-wrap">
+        <AdminHeader
+          userEmail={admin?.email || 'admin@ecargyan.com'}
+          userRole={admin?.role || 'Administrator'}
+        />
+        <main class="admin-content">
+          <div class="admin-container">
+            <slot />
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  .admin-body {
+    background-color: var(--color-surface-subtle);
+    min-height: 100vh;
+  }
+
+  .admin-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .admin-main-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .admin-content {
+    flex: 1;
+    padding: 2rem;
+  }
+
+  .admin-container {
+    max-width: var(--max-width-wide);
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    .admin-shell {
+      flex-direction: column;
+    }
+
+    .admin-content {
+      padding: 1.25rem 1rem;
+    }
+  }
+</style>

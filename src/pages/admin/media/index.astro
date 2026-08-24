@@ -1,0 +1,341 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const search = url.searchParams.get('q') || '';
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+const mediaItems = dbService ? await dbService.listMedia(50, 0, search) : [];
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+---
+
+<AdminLayout title="Media Library" currentPath="/admin/media">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Media & Asset Library</h1>
+      <p class="page-description">
+        Direct Cloudflare R2 object storage for editorial imagery and graphics.
+      </p>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <div class="media-layout">
+    <div class="media-main">
+      <div class="filter-bar">
+        <form method="GET" class="search-form">
+          <input
+            type="search"
+            name="q"
+            value={search}
+            placeholder="Search media files by name..."
+            class="form-input search-input"
+          />
+          <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+          {search && (
+            <a href="/admin/media" class="btn btn-secondary btn-sm">Clear</a>
+          )}
+        </form>
+        <span class="count-badge">{mediaItems.length} Assets</span>
+      </div>
+
+      {mediaItems.length === 0 ? (
+        <div class="empty-box">
+          <p class="empty-text">No media assets found.</p>
+          <span class="empty-subtext">Upload images using the form to populate the editorial media library.</span>
+        </div>
+      ) : (
+        <div class="media-grid">
+          {mediaItems.map((item) => (
+            <div class="media-card">
+              <div class="media-preview">
+                <img
+                  src={`/api/media/${item.storage_key}`}
+                  alt={item.alt_text || item.filename}
+                  loading="lazy"
+                />
+              </div>
+              <div class="media-meta">
+                <span class="media-filename" title={item.filename}>{item.filename}</span>
+                <div class="media-details">
+                  <span>{formatFileSize(item.size)}</span>
+                  <span>{item.mime_type.replace('image/', '')}</span>
+                </div>
+                {item.alt_text && (
+                  <span class="media-alt" title={item.alt_text}>Alt: {item.alt_text}</span>
+                )}
+                <div class="media-actions">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-xs copy-btn"
+                    onclick={`navigator.clipboard.writeText('/api/media/${item.storage_key}').then(() => alert('Image URL copied to clipboard!'))`}
+                  >
+                    Copy URL
+                  </button>
+                  <form action="/admin/media/delete" method="POST" onsubmit="return confirm('Permanently delete this asset from R2 storage?');">
+                    <input type="hidden" name="id" value={item.id} />
+                    <button type="submit" class="btn btn-danger btn-xs">Delete</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div class="upload-sidebar">
+      <div class="upload-card">
+        <h2 class="card-title">Upload Asset</h2>
+        <form action="/admin/media/upload" method="POST" enctype="multipart/form-data" class="upload-form">
+          <div class="form-group">
+            <label for="file" class="form-label">Select File *</label>
+            <input
+              type="file"
+              id="file"
+              name="file"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml"
+              class="form-input file-input"
+              required
+            />
+            <span class="input-hint">JPEG, PNG, WebP, AVIF, GIF, SVG (Max 10MB)</span>
+          </div>
+
+          <div class="form-group">
+            <label for="alt_text" class="form-label">Alt Text</label>
+            <input type="text" id="alt_text" name="alt_text" class="form-input" placeholder="Descriptive text for accessibility" />
+          </div>
+
+          <div class="form-group">
+            <label for="caption" class="form-label">Caption</label>
+            <input type="text" id="caption" name="caption" class="form-input" placeholder="Editorial photo credit or caption" />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">
+            Upload to R2 Storage
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .media-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .filter-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    background-color: var(--color-surface);
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .search-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+  }
+
+  .search-input {
+    max-width: 320px;
+  }
+
+  .count-badge {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .media-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .media-preview {
+    height: 140px;
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .media-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .media-meta {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .media-filename {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .media-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .media-alt {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .media-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .upload-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+  }
+
+  .file-input {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .input-hint {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-top: 0.25rem;
+  }
+
+  .empty-box {
+    background-color: var(--color-surface);
+    border: 1px dashed var(--color-border-dark);
+    border-radius: var(--radius-md);
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 900px) {
+    .media-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

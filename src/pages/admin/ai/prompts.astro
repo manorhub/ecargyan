@@ -1,0 +1,162 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+let prompts: any[] = [];
+if (runtimeEnv?.DB) {
+  const { results } = await runtimeEnv.DB
+    .prepare('SELECT * FROM prompts ORDER BY task_type ASC, version DESC')
+    .all<any>();
+  prompts = results || [];
+}
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+---
+
+<AdminLayout title="AI Prompt Management" currentPath="/admin/ai">
+  <div class="page-header">
+    <div>
+      <a href="/admin/ai" class="back-link">&larr; Back to AI Telemetry</a>
+      <h1 class="page-title">AI Prompt Versions Management</h1>
+      <p class="page-description">Inspect and configure system/user prompt templates across all editorial AI stages.</p>
+    </div>
+  </div>
+
+  <div class="prompts-grid">
+    {prompts.map((p) => (
+      <div class="card">
+        <div class="prompt-header">
+          <div>
+            <span class="badge badge-neutral">{p.task_type.toUpperCase()}</span>
+            <h2 class="prompt-name">{p.name}</h2>
+            <span class="version-tag mono">v{p.version}</span>
+          </div>
+          <span class:list={['badge', p.is_active ? 'badge-success' : 'badge-neutral']}>
+            {p.is_active ? 'ACTIVE' : 'ARCHIVED'}
+          </span>
+        </div>
+
+        <div class="prompt-section">
+          <label class="section-label">System Prompt</label>
+          <pre class="prompt-code"><code>{p.system_prompt}</code></pre>
+        </div>
+
+        <div class="prompt-section">
+          <label class="section-label">User Template</label>
+          <pre class="prompt-code"><code>{p.user_prompt_template}</code></pre>
+        </div>
+
+        <div class="prompt-footer">
+          <span class="date-text">Created: {formatDate(p.created_at)}</span>
+        </div>
+      </div>
+    ))}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .prompts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .prompt-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 0.35rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .version-tag {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  .prompt-section {
+    margin-bottom: 1rem;
+  }
+
+  .section-label {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .prompt-code {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    max-height: 180px;
+    overflow-y: auto;
+    color: var(--color-text-main);
+  }
+
+  .prompt-footer {
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .date-text {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+</style>

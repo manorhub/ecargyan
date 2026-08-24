@@ -1,0 +1,284 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ArticleCard from '../components/ui/ArticleCard.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import JsonLd from '../components/ui/JsonLd.astro';
+import { SITE_CONFIG } from '../lib/config/site';
+import { getDb } from '../lib/db/client';
+import { generateWebSiteJsonLd } from '../lib/utils/json-ld';
+import type { ArticleWithRelations, CategoryRecord } from '../lib/db/schema';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let customTagline = SITE_CONFIG.tagline;
+let featuredArticle: ArticleWithRelations | null = null;
+let latestArticles: ArticleWithRelations[] = [];
+let totalArticles = 0;
+let categoriesWithArticles: CategoryRecord[] = [];
+
+if (dbService) {
+  const [dbTagline, featured, publishedData, activeCategories] = await Promise.all([
+    dbService.getSetting('site_tagline'),
+    dbService.getFeaturedPublishedArticle(),
+    dbService.getPublishedArticles({ limit: 7, offset: 0 }),
+    dbService.getActiveCategoriesWithCounts(),
+  ]);
+
+  if (dbTagline) customTagline = dbTagline;
+  featuredArticle = featured;
+  totalArticles = publishedData.total;
+  latestArticles = featured ? publishedData.articles.filter((a: ArticleWithRelations) => a.id !== featured.id) : publishedData.articles;
+  categoriesWithArticles = activeCategories.filter((c: CategoryRecord) => ((c as any).article_count || 0) > 0);
+}
+
+const websiteSchema = generateWebSiteJsonLd();
+---
+
+<BaseLayout currentPath="/">
+  <JsonLd schema={websiteSchema} />
+
+  <!-- Hero Publication Banner -->
+  <section class="hero-section">
+    <div class="container hero-inner">
+      <span class="hero-kicker">Automated Editorial & Automotive Intelligence</span>
+      <h1 class="hero-title">{SITE_CONFIG.name}</h1>
+      <p class="hero-subtitle">{customTagline}</p>
+    </div>
+  </section>
+
+  <div class="container main-content-wrapper">
+    {totalArticles === 0 ? (
+      <section class="empty-section">
+        <EmptyState
+          title="No articles yet."
+          message="The ECargyan automated editorial pipeline is initialized. Published technical analyses, market intelligence, and vehicle architecture reports will appear here once published."
+          actionText="Editorial Control Panel"
+          actionHref="/admin"
+        />
+      </section>
+    ) : (
+      <>
+        <!-- Featured Hero Story -->
+        {featuredArticle && (
+          <section class="featured-section" aria-label="Featured Story">
+            <ArticleCard article={featuredArticle} variant="hero" priorityImage={true} />
+          </section>
+        )}
+
+        <!-- Latest Dispatches Grid -->
+        {latestArticles.length > 0 && (
+          <section class="latest-section" aria-label="Latest Dispatches">
+            <div class="section-header">
+              <h2 class="section-title">Latest Dispatches</h2>
+              <span class="section-badge">{totalArticles} Published</span>
+            </div>
+
+            <div class="articles-grid">
+              {latestArticles.map((article: ArticleWithRelations) => (
+                <ArticleCard article={article} variant="standard" />
+              ))}
+            </div>
+          </section>
+        )}
+
+        <!-- Category Clusters if active -->
+        {categoriesWithArticles.length > 0 && (
+          <section class="category-topics-section">
+            <div class="section-header">
+              <h2 class="section-title">Explore by Taxonomy</h2>
+            </div>
+            <div class="topics-tags-wrap">
+              {categoriesWithArticles.map((cat: CategoryRecord) => (
+                <a href={`/category/${cat.slug}`} class="topic-chip">
+                  <span class="topic-name">{cat.name}</span>
+                  <span class="topic-count">{(cat as any).article_count}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <!-- Editorial Dispatch Briefing Box -->
+        <section class="dispatch-briefing">
+          <div class="briefing-content">
+            <span class="briefing-kicker">Direct Editorial Inquiries</span>
+            <h3 class="briefing-title">Automotive Research & Dispatch Inquiries</h3>
+            <p class="briefing-text">
+              ECargyan delivers structured technical intelligence for automotive engineers, powertrain analysts, and EV infrastructure planners.
+            </p>
+          </div>
+          <div class="briefing-actions">
+            <a href="/about" class="btn btn-primary">Editorial Mission</a>
+            <a href="/rss.xml" class="btn btn-secondary">RSS Feed &nearr;</a>
+          </div>
+        </section>
+      </>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+  .hero-section {
+    padding: 3.5rem 0 2.5rem;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    text-align: center;
+  }
+
+  .hero-inner {
+    max-width: 800px;
+  }
+
+  .hero-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-text-muted);
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+
+  .hero-title {
+    font-size: 3.75rem;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .hero-subtitle {
+    font-size: 1.125rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .main-content-wrapper {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  .featured-section {
+    margin-bottom: 3.5rem;
+  }
+
+  .latest-section {
+    margin-bottom: 4rem;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--color-brand);
+    margin-bottom: 2rem;
+  }
+
+  .section-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+  }
+
+  .section-badge {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  .category-topics-section {
+    margin-bottom: 4rem;
+  }
+
+  .topics-tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .topic-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    color: var(--color-text-main);
+  }
+
+  .topic-chip:hover {
+    border-color: var(--color-border-dark);
+    background-color: var(--color-surface-subtle);
+  }
+
+  .topic-count {
+    font-size: 0.6875rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-dim);
+    background-color: var(--color-surface-subtle);
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .dispatch-briefing {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .briefing-kicker {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .briefing-title {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .briefing-text {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    max-width: 580px;
+    line-height: 1.5;
+  }
+
+  .briefing-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 860px) {
+    .hero-title {
+      font-size: 2.5rem;
+    }
+
+    .dispatch-briefing {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .articles-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

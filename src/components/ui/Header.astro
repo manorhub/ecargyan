@@ -1,0 +1,224 @@
+---
+import { SITE_CONFIG } from '../../lib/config/site';
+import { getDb } from '../../lib/db/client';
+
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = '/' } = Astro.props;
+
+const dbService = getDb(Astro.locals.runtime?.env);
+let categories: any[] = [];
+
+if (dbService) {
+  categories = await dbService.getActiveCategoriesWithCounts();
+}
+---
+
+<header class="site-header">
+  <div class="masthead-top">
+    <div class="container masthead-inner">
+      <div class="masthead-date">
+        <time datetime={new Date().toISOString()}>
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+        </time>
+      </div>
+
+      <div class="brand-center">
+        <a href="/" class="brand-link" aria-label="ECargyan Home">
+          <span class="brand-title">{SITE_CONFIG.name}</span>
+        </a>
+        <span class="brand-tagline">{SITE_CONFIG.tagline}</span>
+      </div>
+
+      <div class="masthead-actions">
+        <a href="/search" class="action-btn" aria-label="Search articles" title="Search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="action-text">Search</span>
+        </a>
+
+        <a href="/admin" class="admin-link" title="Editorial Control Panel">
+          Control Panel
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary Editorial Nav -->
+  <nav class="primary-nav" aria-label="Editorial Categories">
+    <div class="container nav-container">
+      <ul class="nav-links">
+        <li>
+          <a href="/" class:list={['nav-item', { active: currentPath === '/' }]}>
+            Latest Dispatches
+          </a>
+        </li>
+        {categories.slice(0, 7).map((cat) => (
+          <li>
+            <a
+              href={`/category/${cat.slug}`}
+              class:list={['nav-item', { active: currentPath === `/category/${cat.slug}` }]}
+            >
+              {cat.name}
+            </a>
+          </li>
+        ))}
+        <li>
+          <a href="/about" class:list={['nav-item', { active: currentPath === '/about' }]}>
+            About
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+</header>
+
+<style>
+  .site-header {
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .masthead-top {
+    padding: 1.5rem 0 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .masthead-inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .masthead-date {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .brand-center {
+    text-align: center;
+  }
+
+  .brand-title {
+    font-family: var(--font-serif);
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: var(--color-brand);
+    display: block;
+    line-height: 1.1;
+  }
+
+  .brand-tagline {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-text-muted);
+    display: block;
+    margin-top: 0.25rem;
+  }
+
+  .masthead-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-subtle);
+  }
+
+  .action-btn:hover {
+    color: var(--color-text-main);
+    border-color: var(--color-border-dark);
+  }
+
+  .admin-link {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .admin-link:hover {
+    color: var(--color-brand);
+  }
+
+  .primary-nav {
+    padding: 0.625rem 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .primary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-container {
+    display: flex;
+    justify-content: center;
+  }
+
+  .nav-links {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+    white-space: nowrap;
+  }
+
+  .nav-item {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    padding: 0.25rem 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .nav-item:hover,
+  .nav-item.active {
+    color: var(--color-brand);
+    border-bottom-color: var(--color-brand);
+  }
+
+  @media (max-width: 768px) {
+    .masthead-inner {
+      grid-template-columns: 1fr auto;
+    }
+
+    .masthead-date {
+      display: none;
+    }
+
+    .brand-center {
+      text-align: left;
+    }
+
+    .brand-title {
+      font-size: 1.75rem;
+    }
+
+    .nav-container {
+      justify-content: flex-start;
+    }
+
+    .nav-links {
+      gap: 1.25rem;
+    }
+  }
+</style>

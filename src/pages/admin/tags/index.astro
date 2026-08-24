@@ -1,0 +1,249 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+import { getUniqueSlug } from '../../../lib/db/slug';
+import { validateTagInput } from '../../../lib/utils/validation';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let successMessage = '';
+let errorMessage = '';
+
+if (Astro.request.method === 'POST' && dbService) {
+  try {
+    const formData = await Astro.request.formData();
+    const name = (formData.get('name') as string || '').trim();
+
+    const validation = validateTagInput({ name });
+    if (!validation.valid) {
+      errorMessage = validation.errors.name || 'Validation error.';
+    } else {
+      const tagId = `tag_${Date.now()}`;
+      const slug = await getUniqueSlug(runtimeEnv!.DB, 'tags', name);
+
+      await dbService.createTag({
+        id: tagId,
+        name,
+        slug,
+      });
+
+      if (Astro.locals.admin) {
+        await dbService.logAudit(Astro.locals.admin.id, 'create_tag', 'tag', tagId, { name, slug });
+      }
+
+      successMessage = `Tag "${name}" added successfully.`;
+    }
+  } catch (err) {
+    errorMessage = 'Failed to create tag.';
+  }
+}
+
+const tags = dbService ? await dbService.listTags() : [];
+---
+
+<AdminLayout title="Tags" currentPath="/admin/tags">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Editorial Tags</h1>
+      <p class="page-description">
+        Cross-cutting topic keywords and entity identifiers.
+      </p>
+    </div>
+  </div>
+
+  {successMessage && <div class="alert alert-success">{successMessage}</div>}
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <div class="tags-layout">
+    <div class="table-card">
+      <div class="card-header">
+        <h2 class="card-title">Existing Tags ({tags.length})</h2>
+      </div>
+
+      {tags.length === 0 ? (
+        <div class="empty-box">
+          <p class="empty-text">No tags yet.</p>
+          <span class="empty-subtext">Add tags to classify topics across editorial articles.</span>
+        </div>
+      ) : (
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Tag Name</th>
+                <th>Slug</th>
+                <th>Articles</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tags.map((tag) => (
+                <tr>
+                  <td><strong>{tag.name}</strong></td>
+                  <td><code class="slug-code">#{tag.slug}</code></td>
+                  <td><span class="badge badge-neutral">{tag.article_count ?? 0}</span></td>
+                  <td class="text-right">
+                    <form action="/admin/tags/delete" method="POST" onsubmit="return confirm('Delete this tag?');">
+                      <input type="hidden" name="id" value={tag.id} />
+                      <button type="submit" class="btn btn-danger btn-xs">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+    <div class="form-card">
+      <div class="card-header">
+        <h2 class="card-title">Add Tag</h2>
+      </div>
+      <form method="POST" class="tag-form">
+        <div class="form-group">
+          <label for="name" class="form-label">Tag Name *</label>
+          <input type="text" id="name" name="name" class="form-input" placeholder="e.g. Solid State Battery" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          Add Tag
+        </button>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .tags-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .table-card, .form-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .tag-form {
+    padding: 1.5rem;
+  }
+
+  .btn-block {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+
+  .empty-box {
+    padding: 3.5rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .slug-code {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    background-color: var(--color-surface-subtle);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-brand-accent);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 860px) {
+    .tags-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

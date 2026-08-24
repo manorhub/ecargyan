@@ -1,0 +1,329 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+let successMessage = '';
+let errorMessage = '';
+
+// Check whether DEEPSEEK_API_KEY is configured in runtime bindings or process.env
+const apiKeyConfigured = Boolean(
+  (runtimeEnv as any)?.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY
+);
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const model = (formData.get('model') as string || 'deepseek-chat').trim();
+    const temperature = (formData.get('temperature') as string || '0.4').trim();
+    const maxTokens = (formData.get('max_tokens') as string || '4096').trim();
+    const editorialTone = (formData.get('editorial_tone') as string || '').trim();
+    const targetWordCount = (formData.get('target_word_count') as string || '1200').trim();
+    const minQualityScore = (formData.get('min_quality_score') as string || '70').trim();
+    const autoGenerateFaq = formData.get('auto_generate_faq') === 'on' ? 'true' : 'false';
+    const factCheckMode = (formData.get('fact_check_mode') as string || 'strict').trim();
+
+    await dbService.updateAiSettings({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      editorial_tone: editorialTone,
+      target_word_count: targetWordCount,
+      min_quality_score: minQualityScore,
+      auto_generate_faq: autoGenerateFaq,
+      fact_check_mode: factCheckMode,
+    });
+
+    if (Astro.locals.admin) {
+      await dbService.logAudit(Astro.locals.admin.id, 'update_ai_settings', 'ai_settings', 'global', { model });
+    }
+
+    successMessage = 'AI settings updated successfully.';
+  } catch (err: any) {
+    errorMessage = err.message || 'Failed to update AI settings.';
+  }
+}
+
+const currentSettings = await dbService.getAiSettings();
+---
+
+<AdminLayout title="AI Editorial Settings" currentPath="/admin/settings/ai">
+  <div class="page-header">
+    <div>
+      <a href="/admin/ai" class="back-link">&larr; Back to AI Engine</a>
+      <h1 class="page-title">DeepSeek AI Editorial Settings</h1>
+      <p class="page-description">Configure model hyperparameters, editorial voice guidelines, and quality thresholds.</p>
+    </div>
+  </div>
+
+  {successMessage && <div class="alert alert-success">{successMessage}</div>}
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <div class="settings-grid">
+    <form method="POST" class="settings-form">
+      <!-- API Key Status Box -->
+      <div class="card api-status-card">
+        <h2 class="card-title">Provider Connection Status</h2>
+        <div class="status-row">
+          <span class="status-indicator-dot" class:list={[{ 'dot-active': apiKeyConfigured }]}></span>
+          <div>
+            <strong>DeepSeek API Key:</strong>{' '}
+            {apiKeyConfigured ? (
+              <span class="badge badge-success">Configured & Bound</span>
+            ) : (
+              <span class="badge badge-warning">Missing (Set DEEPSEEK_API_KEY in Cloudflare / .env)</span>
+            )}
+          </div>
+        </div>
+        <p class="api-hint">
+          API credentials are kept server-side in Cloudflare Worker secrets and are never exposed to browser client code.
+        </p>
+      </div>
+
+      <!-- Model Parameters -->
+      <div class="card">
+        <h2 class="card-title">Model Parameters</h2>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="model" class="form-label">DeepSeek Model</label>
+            <select id="model" name="model" class="form-input">
+              <option value="deepseek-chat" selected={currentSettings['model'] === 'deepseek-chat' || !currentSettings['model']}>
+                deepseek-chat (V3 - Fast Editorial Drafting)
+              </option>
+              <option value="deepseek-reasoner" selected={currentSettings['model'] === 'deepseek-reasoner'}>
+                deepseek-reasoner (R1 - Deep Technical Synthesis)
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="temperature" class="form-label">Sampling Temperature</label>
+            <select id="temperature" name="temperature" class="form-input">
+              <option value="0.2" selected={currentSettings['temperature'] === '0.2'}>0.2 (Strictly Factual / Conservative)</option>
+              <option value="0.4" selected={currentSettings['temperature'] === '0.4' || !currentSettings['temperature']}>0.4 (Balanced Journalistic - Recommended)</option>
+              <option value="0.6" selected={currentSettings['temperature'] === '0.6'}>0.6 (Creative / Longform)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="max_tokens" class="form-label">Max Output Tokens</label>
+            <select id="max_tokens" name="max_tokens" class="form-input">
+              <option value="2048" selected={currentSettings['max_tokens'] === '2048'}>2,048 tokens (~1,500 words)</option>
+              <option value="4096" selected={currentSettings['max_tokens'] === '4096' || !currentSettings['max_tokens']}>4,096 tokens (~3,000 words)</option>
+              <option value="8192" selected={currentSettings['max_tokens'] === '8192'}>8,192 tokens (~6,000 words)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="target_word_count" class="form-label">Target Article Length</label>
+            <select id="target_word_count" name="target_word_count" class="form-input">
+              <option value="800" selected={currentSettings['target_word_count'] === '800'}>~800 words (Concise News Brief)</option>
+              <option value="1200" selected={currentSettings['target_word_count'] === '1200' || !currentSettings['target_word_count']}>~1,200 words (Standard Feature)</option>
+              <option value="1800" selected={currentSettings['target_word_count'] === '1800'}>~1,800 words (In-depth Technical Analysis)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Editorial Voice & Style -->
+      <div class="card">
+        <h2 class="card-title">Editorial Voice & Quality Guardrails</h2>
+
+        <div class="form-group">
+          <label for="editorial_tone" class="form-label">Editorial Voice & Style Guidelines</label>
+          <textarea
+            id="editorial_tone"
+            name="editorial_tone"
+            class="form-input"
+            rows="3"
+          >{currentSettings['editorial_tone'] || 'Authoritative, clear, journalistic, and technology-focused without marketing hype.'}</textarea>
+          <span class="field-hint">Injected into system instructions for writer prompt.</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="min_quality_score" class="form-label">Minimum Quality Score (0–100)</label>
+            <input
+              type="number"
+              id="min_quality_score"
+              name="min_quality_score"
+              class="form-input"
+              min="50"
+              max="100"
+              value={currentSettings['min_quality_score'] || '70'}
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="fact_check_mode" class="form-label">Fact-Checking Mode</label>
+            <select id="fact_check_mode" name="fact_check_mode" class="form-input">
+              <option value="strict" selected={currentSettings['fact_check_mode'] === 'strict' || !currentSettings['fact_check_mode']}>
+                Strict (Flags all unverified statements)
+              </option>
+              <option value="standard" selected={currentSettings['fact_check_mode'] === 'standard'}>
+                Standard (Allows reasonable industry inferences)
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              name="auto_generate_faq"
+              checked={currentSettings['auto_generate_faq'] !== 'false'}
+            />
+            <span>Auto-generate structured FAQ section when supported by research facts</span>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save Settings</button>
+          <a href="/admin/ai" class="btn btn-secondary">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .settings-grid {
+    max-width: 760px;
+  }
+
+  .settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.75rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .api-status-card {
+    background-color: var(--color-surface-subtle);
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .status-indicator-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--color-danger);
+  }
+
+  .status-indicator-dot.dot-active {
+    background-color: var(--color-success);
+  }
+
+  .api-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.5rem;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .field-hint {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-top: 0.25rem;
+  }
+
+  .checkbox-group {
+    margin-top: 0.5rem;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 640px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,189 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ArticleCard from '../components/ui/ArticleCard.astro';
+import EmptyState from '../components/ui/EmptyState.astro';
+import Pagination from '../components/ui/Pagination.astro';
+import { getDb } from '../lib/db/client';
+import { getCanonicalUrl } from '../lib/config/site';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const query = (url.searchParams.get('q') || '').trim();
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 12;
+const offset = (page - 1) * pageSize;
+
+let searchResults: any[] = [];
+let totalResults = 0;
+
+if (query && dbService) {
+  const result = await dbService.getPublishedArticles({
+    search: query,
+    limit: pageSize,
+    offset,
+  });
+  searchResults = result.articles;
+  totalResults = result.total;
+}
+
+const totalPages = Math.ceil(totalResults / pageSize) || 1;
+const canonicalUrl = getCanonicalUrl('/search');
+---
+
+<BaseLayout
+  seo={{
+    title: query ? `Search: ${query}` : 'Search Editorial Dispatches',
+    description: 'Search ECargyan automotive reports, vehicle architecture analyses, and technical intelligence.',
+    canonicalUrl,
+    noindex: true, // Search result pages are permanently excluded from search engine indexing
+  }}
+  currentPath="/search"
+>
+  <section class="search-hero">
+    <div class="container">
+      <div class="search-box-wrap">
+        <span class="search-kicker">Editorial Index Search</span>
+        <h1 class="search-title">Search ECargyan Dispatches</h1>
+        <form method="GET" action="/search" class="search-bar-form">
+          <input
+            type="search"
+            name="q"
+            value={query}
+            placeholder="Search keywords, vehicle models, powertrain specs..."
+            class="form-input search-hero-input"
+            required
+            autofocus
+          />
+          <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <main class="container search-main">
+    {query ? (
+      <>
+        <div class="search-meta-bar">
+          <span class="search-count">
+            {totalResults} {totalResults === 1 ? 'Result' : 'Results'} for <strong>&ldquo;{query}&rdquo;</strong>
+          </span>
+        </div>
+
+        {totalResults === 0 ? (
+          <EmptyState
+            title={`No articles found for “${query}”.`}
+            message="Check for typos or try searching with broader automotive keywords."
+            actionText="Browse All Dispatches"
+            actionHref="/"
+          />
+        ) : (
+          <>
+            <div class="articles-grid">
+              {searchResults.map((art) => (
+                <ArticleCard article={art} variant="standard" />
+              ))}
+            </div>
+
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              baseUrl={`/search?q=${encodeURIComponent(query)}`}
+            />
+          </>
+        )}
+      </>
+    ) : (
+      <div class="search-initial-hint">
+        <p>Enter automotive topics, battery technology terms, or market segments above to search published dispatches.</p>
+      </div>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  .search-hero {
+    padding: 4rem 0 3rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .search-box-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .search-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .search-title {
+    font-size: 2.5rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+  }
+
+  .search-bar-form {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .search-hero-input {
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .search-main {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  .search-meta-bar {
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--color-border);
+    margin-bottom: 2rem;
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .search-meta-bar strong {
+    color: var(--color-text-main);
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  .search-initial-hint {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 640px) {
+    .search-title {
+      font-size: 1.875rem;
+    }
+
+    .search-bar-form {
+      flex-direction: column;
+    }
+
+    .articles-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

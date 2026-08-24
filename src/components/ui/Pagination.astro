@@ -1,0 +1,81 @@
+---
+interface Props {
+  currentPage: number;
+  totalPages: number;
+  baseUrl: string;
+}
+
+const { currentPage, totalPages, baseUrl } = Astro.props;
+
+function getPageUrl(p: number): string {
+  const url = new URL(baseUrl, 'https://ecargyan.com');
+  url.searchParams.set('page', String(p));
+  return `${url.pathname}${url.search}`;
+}
+---
+
+{totalPages > 1 && (
+  <nav aria-label="Pagination Navigation" class="pagination-wrap">
+    <div class="pagination">
+      {currentPage > 1 ? (
+        <a href={getPageUrl(currentPage - 1)} class="btn btn-secondary btn-sm" aria-label="Previous page">
+          &larr; Previous
+        </a>
+      ) : (
+        <span class="btn btn-secondary btn-sm disabled" aria-disabled="true">
+          &larr; Previous
+        </span>
+      )}
+
+      <span class="page-indicator">
+        Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+      </span>
+
+      {currentPage < totalPages ? (
+        <a href={getPageUrl(currentPage + 1)} class="btn btn-secondary btn-sm" aria-label="Next page">
+          Next &rarr;
+        </a>
+      ) : (
+        <span class="btn btn-secondary btn-sm disabled" aria-disabled="true">
+          Next &rarr;
+        </span>
+      )}
+    </div>
+  </nav>
+)}
+
+<style>
+  .pagination-wrap {
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: center;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .page-indicator {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .page-indicator strong {
+    color: var(--color-text-main);
+  }
+
+  .btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.875rem;
+    font-size: 0.8125rem;
+  }
+</style>

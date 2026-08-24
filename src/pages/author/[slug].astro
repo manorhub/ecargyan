@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ui/ArticleCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Pagination from '../../components/ui/Pagination.astro';
+import { getDb } from '../../lib/db/client';
+import { getCanonicalUrl } from '../../lib/config/site';
+import type { ArticleWithRelations } from '../../lib/db/schema';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/404', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/500', 302);
+
+const authorRecord = await runtimeEnv?.DB.prepare('SELECT * FROM authors WHERE slug = ? AND status = "active" LIMIT 1').bind(slug).first<{ id: string; name: string; slug: string; bio: string | null; avatar_media_id: string | null }>();
+
+if (!authorRecord) {
+  return Astro.redirect('/404', 302);
+}
+
+const url = new URL(Astro.request.url);
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 9;
+const offset = (page - 1) * pageSize;
+
+const { articles, total } = await dbService.getPublishedArticles({
+  authorSlug: slug,
+  limit: pageSize,
+  offset,
+});
+
+const totalPages = Math.ceil(total / pageSize) || 1;
+const canonicalUrl = getCanonicalUrl(`/author/${slug}`);
+
+const breadcrumbItems = [
+  { name: 'Contributors', url: '/' },
+  { name: authorRecord.name, url: `/author/${slug}` },
+];
+---
+
+<BaseLayout
+  seo={{
+    title: `${authorRecord.name} — Contributor Profile`,
+    description: authorRecord.bio || `Read articles, analysis, and dispatches authored by ${authorRecord.name}.`,
+    canonicalUrl,
+    author: authorRecord.name,
+  }}
+  currentPath={`/author/${slug}`}
+>
+  <section class="author-header-section">
+    <div class="container">
+      <Breadcrumbs items={breadcrumbItems} />
+      <div class="author-card-main">
+        <span class="author-kicker">Editorial Contributor</span>
+        <h1 class="author-name-title">{authorRecord.name}</h1>
+        {authorRecord.bio && (
+          <p class="author-bio-full">{authorRecord.bio}</p>
+        )}
+        <span class="count-badge">{total} {total === 1 ? 'Published Article' : 'Published Articles'}</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="container archive-main">
+    {total === 0 ? (
+      <EmptyState
+        title={`No published articles by ${authorRecord.name} yet.`}
+        message="This author has not published reports yet. Dispatches will appear here once published."
+        actionText="Explore Latest Dispatches"
+        actionHref="/"
+      />
+    ) : (
+      <>
+        <div class="articles-grid">
+          {articles.map((art: ArticleWithRelations) => (
+            <ArticleCard article={art} variant="standard" />
+          ))}
+        </div>
+
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          baseUrl={`/author/${slug}`}
+        />
+      </>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  .author-header-section {
+    padding: 3.5rem 0 2.5rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .author-card-main {
+    max-width: 720px;
+  }
+
+  .author-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .author-name-title {
+    font-size: 2.75rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .author-bio-full {
+    font-size: 1.0625rem;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin-bottom: 1.25rem;
+  }
+
+  .count-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    padding: 0.25rem 0.6rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+  }
+
+  .archive-main {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .author-name-title {
+      font-size: 2rem;
+    }
+
+    .articles-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

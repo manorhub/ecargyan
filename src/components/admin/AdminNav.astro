@@ -1,0 +1,257 @@
+---
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = '/admin' } = Astro.props;
+
+interface NavGroup {
+  title: string;
+  items: Array<{
+    name: string;
+    href: string;
+    badge?: string;
+  }>;
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: 'Core',
+    items: [
+      { name: 'Dashboard', href: '/admin' },
+    ],
+  },
+  {
+    title: 'Content',
+    items: [
+      { name: 'Articles', href: '/admin/articles' },
+      { name: 'Review Queue', href: '/admin/review' },
+      { name: 'Categories', href: '/admin/categories' },
+      { name: 'Tags', href: '/admin/tags' },
+      { name: 'Authors', href: '/admin/authors' },
+      { name: 'Media Library', href: '/admin/media' },
+    ],
+  },
+  {
+    title: 'Research',
+    items: [
+      { name: 'Sources Registry', href: '/admin/sources' },
+      { name: 'Research Pool', href: '/admin/research' },
+    ],
+  },
+  {
+    title: 'AI Editorial',
+    items: [
+      { name: 'AI Runs Telemetry', href: '/admin/ai' },
+      { name: 'Prompt Versions', href: '/admin/ai/prompts' },
+      { name: 'AI Settings', href: '/admin/settings/ai' },
+    ],
+  },
+  {
+    title: 'Automation',
+    items: [
+      { name: 'Operations Overview', href: '/admin/automation' },
+      { name: 'Failed Jobs Center', href: '/admin/automation/failed' },
+      { name: 'Pipeline History', href: '/admin/automation/history' },
+      { name: 'Automation Settings', href: '/admin/automation/settings' },
+    ],
+  },
+  {
+    title: 'Technical SEO',
+    items: [
+      { name: 'SEO Health Audit', href: '/admin/seo' },
+      { name: '301 Redirects', href: '/admin/seo/redirects' },
+      { name: 'Content Freshness', href: '/admin/seo/freshness' },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { name: 'Health Diagnostics', href: '/admin/system/health' },
+      { name: 'Operational Logs', href: '/admin/system/logs' },
+      { name: 'Data Export', href: '/admin/system/export' },
+      { name: 'Site Settings', href: '/admin/settings' },
+    ],
+  },
+];
+---
+
+<aside class="admin-sidebar" aria-label="Admin Navigation">
+  <div class="sidebar-brand">
+    <a href="/" class="brand-link" title="Return to Public Site">
+      <span class="brand-name">ECargyan</span>
+      <span class="brand-env">Admin</span>
+    </a>
+  </div>
+
+  <nav class="sidebar-nav">
+    {navGroups.map((group) => (
+      <div class="nav-section">
+        <div class="nav-section-title">{group.title}</div>
+        <ul class="nav-list">
+          {group.items.map((item) => {
+            const isActive = currentPath === item.href || (item.href !== '/admin' && currentPath.startsWith(item.href) && (item.href.split('/').length > 2 || currentPath === item.href));
+            return (
+              <li class="nav-item">
+                <a href={item.href} class:list={['nav-link', { active: isActive }]}>
+                  <span class="nav-label">{item.name}</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    ))}
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-badge">
+      <span class="user-role">ADMIN</span>
+    </div>
+    <form action="/admin/logout" method="POST" class="logout-form">
+      <button type="submit" class="logout-button" title="Sign out of administration">
+        Sign out
+      </button>
+    </form>
+  </div>
+</aside>
+
+<style>
+  .admin-sidebar {
+    width: 240px;
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-brand {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .brand-link {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--color-text-main);
+  }
+
+  .brand-name {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .brand-env {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+    border: 1px solid var(--color-border);
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .nav-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .nav-section-title {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+    padding: 0.25rem 0.75rem;
+  }
+
+  .nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .nav-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--color-text-main);
+    background-color: var(--color-surface-subtle);
+  }
+
+  .nav-link.active {
+    color: var(--color-text-main);
+    background-color: var(--color-surface-subtle);
+    font-weight: 600;
+    border-left: 2px solid var(--color-accent-blue);
+  }
+
+  .sidebar-footer {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .user-role {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--color-accent-blue);
+  }
+
+  .logout-button {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .logout-button:hover {
+    color: var(--color-danger);
+    background-color: var(--color-danger-bg);
+  }
+
+  @media (max-width: 768px) {
+    .admin-sidebar {
+      width: 100%;
+      height: auto;
+      position: static;
+      border-right: none;
+      border-bottom: 1px solid var(--color-border);
+    }
+  }
+</style>

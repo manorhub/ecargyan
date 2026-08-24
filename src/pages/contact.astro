@@ -1,0 +1,154 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCanonicalUrl } from '../lib/config/site';
+import { getDb } from '../lib/db/client';
+
+const dbService = getDb(Astro.locals.runtime?.env);
+let contactEmail = 'editorial@ecargyan.com';
+
+if (dbService) {
+  const dbEmail = await dbService.getSetting('contact_email');
+  if (dbEmail) contactEmail = dbEmail;
+}
+
+const canonicalUrl = getCanonicalUrl('/contact');
+---
+
+<BaseLayout
+  seo={{
+    title: 'Contact & Dispatch Desk',
+    description: 'Contact ECargyan editorial team for research inquiries, technical tips, and corrections.',
+    canonicalUrl,
+  }}
+  currentPath="/contact"
+>
+  <header class="static-header">
+    <div class="container-narrow">
+      <span class="static-kicker">Editorial Inquiries</span>
+      <h1 class="static-title">Dispatch Desk</h1>
+      <p class="static-subhead">
+        Direct communications channel for automotive intelligence tips, research submissions, and corrections.
+      </p>
+    </div>
+  </header>
+
+  <main class="container-narrow static-content">
+    <div class="contact-card">
+      <h2 class="card-heading">Direct Editorial Channel</h2>
+      <p class="card-text">
+        For technical corrections, press releases, or research collaboration:
+      </p>
+      <div class="email-display">
+        <span class="email-label">Email:</span>
+        <a href={`mailto:${contactEmail}`} class="email-address">{contactEmail}</a>
+      </div>
+    </div>
+
+    <div class="guidelines-card">
+      <h3 class="guidelines-title">Submission Standards</h3>
+      <ul class="guidelines-list">
+        <li><strong>Primary Sources:</strong> Submissions should include primary manufacturer documentation, patent references, or technical telemetry where applicable.</li>
+        <li><strong>Corrections:</strong> We promptly review and record verified factual corrections. Please specify the article title, publication date, and relevant passage.</li>
+      </ul>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .static-header {
+    padding: 4.5rem 0 3rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .static-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .static-title {
+    font-size: 3rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .static-subhead {
+    font-size: 1.1875rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .static-content {
+    padding: 3.5rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .contact-card, .guidelines-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+  }
+
+  .card-heading {
+    font-size: 1.35rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .card-text {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .email-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .email-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .email-address {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-brand);
+  }
+
+  .guidelines-title {
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+  }
+
+  .guidelines-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+  }
+
+  .guidelines-list strong {
+    color: var(--color-text-main);
+  }
+</style>

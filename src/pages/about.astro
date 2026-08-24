@@ -1,0 +1,103 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+
+const canonicalUrl = getCanonicalUrl('/about');
+---
+
+<BaseLayout
+  seo={{
+    title: 'About — Editorial Mission & Standards',
+    description: 'ECargyan is an independent automotive intelligence and technical editorial publication.',
+    canonicalUrl,
+  }}
+  currentPath="/about"
+>
+  <header class="static-header">
+    <div class="container-narrow">
+      <span class="static-kicker">Publication Masthead</span>
+      <h1 class="static-title">About {SITE_CONFIG.name}</h1>
+      <p class="static-subhead">
+        Independent editorial coverage of modern vehicle architectures, powertrain technologies, and automotive software.
+      </p>
+    </div>
+  </header>
+
+  <main class="container-narrow static-content prose">
+    <h2>Editorial Mission</h2>
+    <p>
+      {SITE_CONFIG.name} delivers structured technical analysis, engineering benchmarks, and industry intelligence across global automotive ecosystems. Our coverage focuses on electric mobility, battery chemistry advancements, autonomous driving architectures, and automotive manufacturing.
+    </p>
+
+    <h2>Publishing Standards & Independence</h2>
+    <p>
+      Our reports are authored and verified independently. We prioritize engineering depth, verified telemetry, and primary manufacturer documentation over promotional press releases.
+    </p>
+
+    <h2>Technology Foundation</h2>
+    <p>
+      {SITE_CONFIG.name} is engineered on a modern edge publishing stack built with Astro.js and Cloudflare edge infrastructure, delivering instantaneous load times and secure, resilient delivery worldwide.
+    </p>
+
+    <div class="contact-box">
+      <h3>Editorial Correspondence</h3>
+      <p>
+        For research inquiries, corrections, or intelligence tips, please reach out via our <a href="/contact">Dispatch Desk</a>.
+      </p>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .static-header {
+    padding: 4.5rem 0 3rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .static-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .static-title {
+    font-size: 3rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .static-subhead {
+    font-size: 1.1875rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .static-content {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  .contact-box {
+    margin-top: 3.5rem;
+    padding: 2rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .contact-box h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .contact-box p {
+    margin-bottom: 0;
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+</style>

@@ -1,0 +1,106 @@
+---
+import Header from '../components/ui/Header.astro';
+import Footer from '../components/ui/Footer.astro';
+import { buildSeoMetadata, type SeoProps } from '../lib/utils/seo';
+import '../styles/global.css';
+
+interface Props {
+  seo?: SeoProps;
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  robots?: string;
+  schemaJson?: string;
+  currentPath?: string;
+}
+
+const {
+  seo: seoProps,
+  title: propTitle,
+  description: propDesc,
+  canonicalPath,
+  robots = 'index, follow',
+  schemaJson,
+  currentPath = '/',
+} = Astro.props;
+
+const seo = buildSeoMetadata(seoProps);
+const finalTitle = propTitle || seo.title;
+const finalDescription = propDesc || seo.description;
+const finalCanonical = canonicalPath ? `https://ecargyan.com${canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath}` : seo.canonical;
+const isNoIndex = robots.includes('noindex') || seo.noindex;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    
+    <title>{finalTitle}</title>
+    <meta name="description" content={finalDescription} />
+    <link rel="canonical" href={finalCanonical} />
+    <meta name="robots" content={isNoIndex ? 'noindex, follow' : robots} />
+    
+    <!-- Open Graph Metadata -->
+    <meta property="og:site_name" content={seo.siteName} />
+    <meta property="og:title" content={finalTitle} />
+    <meta property="og:description" content={finalDescription} />
+    <meta property="og:url" content={finalCanonical} />
+    <meta property="og:type" content={seo.ogType} />
+    <meta property="og:image" content={seo.ogImage} />
+    <meta property="og:locale" content={seo.locale} />
+
+    <!-- Twitter Card Metadata -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={finalTitle} />
+    <meta name="twitter:description" content={finalDescription} />
+    <meta name="twitter:image" content={seo.ogImage} />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Global Organization & WebSite JSON-LD Schema -->
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "NewsMediaOrganization",
+          "name": "ECargyan",
+          "url": "https://ecargyan.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://ecargyan.com/favicon.svg"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "name": "ECargyan",
+          "url": "https://ecargyan.com/",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://ecargyan.com/search?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    })} />
+
+    {schemaJson && <script type="application/ld+json" is:inline set:html={schemaJson} />}
+  </head>
+  <body>
+    <Header currentPath={currentPath} />
+    <main id="main-content" class="page-main">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>
+
+<style>
+  .page-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+</style>

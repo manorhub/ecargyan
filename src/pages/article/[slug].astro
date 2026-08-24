@@ -1,0 +1,500 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import ArticleCard from '../../components/ui/ArticleCard.astro';
+import JsonLd from '../../components/ui/JsonLd.astro';
+import { getDb } from '../../lib/db/client';
+import { renderMarkdown } from '../../lib/utils/markdown';
+import { calculateReadingTime } from '../../lib/utils/reading-time';
+import { formatDate } from '../../lib/utils/formatters';
+import { generateArticleJsonLd, generateBreadcrumbJsonLd } from '../../lib/utils/json-ld';
+import { getCanonicalUrl } from '../../lib/config/site';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/404', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/500', 302);
+
+const article = await dbService.getArticleBySlug(slug);
+if (!article) return Astro.redirect('/404', 302);
+
+// Access Control: published articles only unless logged in as admin
+const isPubliclyAvailable = article.status === 'published' && article.published_at && article.published_at <= Date.now();
+const isAdmin = Boolean(Astro.locals.admin);
+
+if (!isPubliclyAvailable && !isAdmin) {
+  return Astro.redirect('/404', 302);
+}
+
+const contentHtml = renderMarkdown(article.content);
+const readingTime = calculateReadingTime(article.content);
+const formattedPubDate = formatDate(article.published_at, 'long');
+const formattedModDate = formatDate(article.updated_at, 'long');
+
+const relatedArticles = await dbService.getRelatedArticles(article.id, article.category_id, 3);
+
+const canonicalUrl = article.seo?.canonical_url || getCanonicalUrl(`/article/${article.slug}`);
+const seoTitle = article.seo?.meta_title || article.title;
+const seoDesc = article.seo?.meta_description || article.excerpt || undefined;
+const ogImage = article.featured_image ? `/api/media/${article.featured_image.storage_key}` : undefined;
+
+const breadcrumbItems = [];
+if (article.category) {
+  breadcrumbItems.push({ name: article.category.name, url: `/category/${article.category.slug}` });
+}
+breadcrumbItems.push({ name: article.title, url: `/article/${article.slug}` });
+
+const articleSchema = generateArticleJsonLd({
+  title: article.title,
+  description: article.excerpt || article.seo?.meta_description || undefined,
+  url: canonicalUrl,
+  image: ogImage ? getCanonicalUrl(ogImage) : undefined,
+  publishedTime: article.published_at ? new Date(article.published_at).toISOString() : undefined,
+  modifiedTime: new Date(article.updated_at).toISOString(),
+  authorName: article.author?.name || undefined,
+});
+
+const breadcrumbSchema = generateBreadcrumbJsonLd(breadcrumbItems);
+---
+
+<BaseLayout
+  seo={{
+    title: seoTitle,
+    description: seoDesc,
+    canonicalUrl,
+    ogImage,
+    ogType: 'article',
+    author: article.author?.name || undefined,
+    publishedTime: article.published_at ? new Date(article.published_at).toISOString() : undefined,
+    modifiedTime: new Date(article.updated_at).toISOString(),
+  }}
+  currentPath={`/article/${article.slug}`}
+>
+  <JsonLd schema={[articleSchema, breadcrumbSchema]} />
+
+  {!isPubliclyAvailable && isAdmin && (
+    <div class="draft-notice">
+      <div class="container-narrow notice-inner">
+        <span class="badge badge-warning">Unpublished Preview</span>
+        <span>Article Status: <strong>{article.status.toUpperCase()}</strong>. Visible only to authenticated administrators.</span>
+        <a href={`/admin/articles/${article.id}/edit`} class="btn btn-secondary btn-xs">Edit Article</a>
+      </div>
+    </div>
+  )}
+
+  <div class="article-page-wrapper">
+    <div class="container-narrow">
+      <Breadcrumbs items={breadcrumbItems} />
+
+      <header class="article-masthead">
+        {article.category && (
+          <a href={`/category/${article.category.slug}`} class="category-kicker">
+            {article.category.name}
+          </a>
+        )}
+        <h1 class="article-headline">{article.title}</h1>
+        {article.excerpt && (
+          <p class="article-lead">{article.excerpt}</p>
+        )}
+
+        <div class="article-byline-bar">
+          <div class="byline-left">
+            {article.author ? (
+              <div class="author-block">
+                <span class="byline-prefix">Reporting by</span>
+                <a href={`/author/${article.author.slug}`} class="author-link">
+                  {article.author.name}
+                </a>
+              </div>
+            ) : (
+              <div class="author-block">
+                <span class="byline-prefix">Dispatch by</span>
+                <span class="author-name">ECargyan Editorial Desk</span>
+              </div>
+            )}
+          </div>
+
+          <div class="byline-right">
+            {formattedPubDate && (
+              <div class="date-block">
+                <span class="byline-prefix">Published</span>
+                <time datetime={new Date(article.published_at || 0).toISOString()}>{formattedPubDate}</time>
+              </div>
+            )}
+            {article.updated_at && article.published_at && (article.updated_at - article.published_at > 3600000) && (
+              <div class="date-block">
+                <span class="byline-prefix">Updated</span>
+                <time datetime={new Date(article.updated_at).toISOString()}>{formattedModDate}</time>
+              </div>
+            )}
+            <div class="read-block">
+              <span class="byline-prefix">Read Time</span>
+              <span class="read-time">{readingTime}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {article.featured_image && (
+        <figure class="featured-media-container">
+          <img
+            src={`/api/media/${article.featured_image.storage_key}`}
+            alt={article.featured_image.alt_text || article.title}
+            class="article-featured-image"
+            fetchpriority="high"
+            loading="eager"
+          />
+          {article.featured_image.caption && (
+            <figcaption class="image-caption">{article.featured_image.caption}</figcaption>
+          )}
+        </figure>
+      )}
+
+      <!-- Article Prose Body -->
+      <div class="article-body prose" set:html={contentHtml} />
+
+      <!-- Tags Cloud -->
+      {article.tags && article.tags.length > 0 && (
+        <footer class="article-tags-footer">
+          <span class="tags-header">Classified Topics</span>
+          <div class="tags-list">
+            {article.tags.map((t) => (
+              <a href={`/tag/${t.slug}`} class="tag-badge">#{t.name}</a>
+            ))}
+          </div>
+        </footer>
+      )}
+
+      <!-- Author Bio Box -->
+      {article.author && (
+        <section class="author-bio-card">
+          <div class="author-bio-info">
+            <span class="bio-kicker">About the Contributor</span>
+            <h3 class="bio-author-name">
+              <a href={`/author/${article.author.slug}`}>{article.author.name}</a>
+            </h3>
+            {article.author.bio && (
+              <p class="bio-text">{article.author.bio}</p>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+
+    <!-- Related Articles Section -->
+    {relatedArticles.length > 0 && (
+      <section class="related-section">
+        <div class="container">
+          <div class="related-header">
+            <h2 class="related-title">Related Dispatches</h2>
+            <span class="related-tagline">More analysis from ECargyan editorial</span>
+          </div>
+
+          <div class="related-grid">
+            {relatedArticles.map((rel) => (
+              <ArticleCard article={rel} variant="standard" />
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+  </div>
+</BaseLayout>
+
+<style>
+  .draft-notice {
+    background-color: var(--color-surface);
+    border-bottom: 2px solid var(--color-warning);
+    padding: 0.75rem 0;
+    font-size: 0.8125rem;
+  }
+
+  .notice-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .article-page-wrapper {
+    padding: 3rem 0 6rem;
+  }
+
+  .article-masthead {
+    margin-bottom: 2.5rem;
+  }
+
+  .category-kicker {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    margin-bottom: 1rem;
+  }
+
+  .category-kicker:hover {
+    text-decoration: underline;
+  }
+
+  .article-headline {
+    font-size: 3.25rem;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 1.25rem;
+    font-weight: 700;
+  }
+
+  .article-lead {
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin-bottom: 2rem;
+  }
+
+  .article-byline-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 0;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.875rem;
+  }
+
+  .byline-left, .byline-right {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .byline-prefix {
+    display: block;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-dim);
+    margin-bottom: 0.15rem;
+  }
+
+  .author-link, .author-name {
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .author-link:hover {
+    text-decoration: underline;
+  }
+
+  .featured-media-container {
+    margin: 2.5rem 0 3.5rem;
+  }
+
+  .article-featured-image {
+    width: 100%;
+    border-radius: var(--radius-md);
+    max-height: 520px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .image-caption {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.5rem;
+    text-align: center;
+    font-style: italic;
+  }
+
+  .prose {
+    font-size: 1.125rem;
+    line-height: 1.8;
+    color: var(--color-text-main);
+  }
+
+  .prose :global(h2) {
+    font-size: 1.875rem;
+    margin: 3rem 0 1.25rem;
+    letter-spacing: -0.02em;
+  }
+
+  .prose :global(h3) {
+    font-size: 1.375rem;
+    margin: 2.25rem 0 1rem;
+    letter-spacing: -0.015em;
+  }
+
+  .prose :global(p) {
+    margin-bottom: 1.75rem;
+  }
+
+  .prose :global(ul), .prose :global(ol) {
+    margin-bottom: 1.75rem;
+    padding-left: 1.75rem;
+  }
+
+  .prose :global(li) {
+    margin-bottom: 0.5rem;
+  }
+
+  .prose :global(blockquote) {
+    border-left: 3px solid var(--color-brand);
+    padding-left: 1.5rem;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.1875rem;
+    color: var(--color-text-muted);
+    margin: 2.5rem 0;
+  }
+
+  .prose :global(hr) {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 3rem 0;
+  }
+
+  .prose :global(pre) {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.25rem;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+    margin-bottom: 1.75rem;
+    font-size: 0.875rem;
+  }
+
+  .prose :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background-color: var(--color-surface-subtle);
+    padding: 0.15rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .article-tags-footer {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .tags-header {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag-badge {
+    font-size: 0.8125rem;
+    font-family: var(--font-mono);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-main);
+  }
+
+  .tag-badge:hover {
+    border-color: var(--color-border-dark);
+    background-color: var(--color-surface-subtle);
+  }
+
+  .author-bio-card {
+    margin-top: 3.5rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+  }
+
+  .bio-kicker {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  .bio-author-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .bio-author-name a {
+    color: var(--color-text-main);
+  }
+
+  .bio-text {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  .related-section {
+    margin-top: 5rem;
+    padding-top: 4rem;
+    border-top: 2px solid var(--color-border);
+  }
+
+  .related-header {
+    margin-bottom: 2rem;
+  }
+
+  .related-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .related-tagline {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 680px) {
+    .article-headline {
+      font-size: 2.25rem;
+    }
+
+    .article-byline-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .byline-left, .byline-right {
+      gap: 1.5rem;
+    }
+
+    .related-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

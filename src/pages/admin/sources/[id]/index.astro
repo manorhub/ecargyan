@@ -1,0 +1,574 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/sources', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/sources', 302);
+
+const source = await dbService.getSourceById(id);
+if (!source) return Astro.redirect('/admin/sources', 302);
+
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+const [jobs, itemsData] = await Promise.all([
+  dbService.listIngestionJobs(id, 10),
+  dbService.listSourceItems({ sourceId: id, limit: 20 }),
+]);
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Never';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getHealthBadge(src: any): { label: string; class: string } {
+  if (src.status === 'disabled') return { label: 'Disabled', class: 'badge-neutral' };
+  if (src.status === 'paused') return { label: 'Paused', class: 'badge-warning' };
+  if (src.status === 'error' || src.consecutive_errors >= 3) return { label: 'Failing', class: 'badge-danger' };
+  if (src.consecutive_errors > 0) return { label: 'Warning', class: 'badge-warning' };
+  if (src.last_success_at) return { label: 'Healthy', class: 'badge-success' };
+  return { label: 'Untested', class: 'badge-neutral' };
+}
+
+const health = getHealthBadge(source);
+---
+
+<AdminLayout title={`Source: ${source.name}`} currentPath="/admin/sources">
+  <div class="page-header">
+    <div>
+      <a href="/admin/sources" class="back-link">&larr; Back to Sources</a>
+      <h1 class="page-title">{source.name}</h1>
+      <p class="page-description">Source ID: <code>{source.id}</code> • Protocol: {source.source_type.toUpperCase()}</p>
+    </div>
+    <div class="header-actions">
+      <form action="/admin/sources/fetch" method="POST" style="display:inline;">
+        <input type="hidden" name="id" value={source.id} />
+        <input type="hidden" name="return_to" value={`/admin/sources/${source.id}`} />
+        <button type="submit" class="btn btn-primary">Fetch Now</button>
+      </form>
+      <a href={`/admin/sources/${source.id}/edit`} class="btn btn-secondary">Edit Configuration</a>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Telemetry & Health Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Source Status</span>
+      <div class="stat-val-row">
+        <span class:list={['badge', health.class]}>{health.label}</span>
+        <span class="stat-sub">{source.status}</span>
+      </div>
+      <span class="stat-detail">Errors: {source.consecutive_errors} consecutive</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Total Ingested Items</span>
+      <div class="stat-val">{source.total_items || 0}</div>
+      <span class="stat-detail">Raw research records in D1</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Duplicates Filtered</span>
+      <div class="stat-val">{source.duplicate_items || 0}</div>
+      <span class="stat-detail">Deduplicated across 3 levels</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Last Ingestion Run</span>
+      <div class="stat-val-date">{formatDate(source.last_checked_at)}</div>
+      <span class="stat-detail">Success: {formatDate(source.last_success_at)}</span>
+    </div>
+  </div>
+
+  {source.last_error_message && (
+    <div class="error-banner">
+      <strong>Last Ingestion Error:</strong> {source.last_error_message}
+      <span class="error-time">({formatDate(source.last_error_at)})</span>
+    </div>
+  )}
+
+  <div class="dashboard-panels">
+    <!-- Source Information Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Source Configuration</h2>
+      </div>
+      <div class="panel-body">
+        <dl class="meta-dl">
+          <div>
+            <dt>Base Website</dt>
+            <dd><a href={source.base_url} target="_blank" rel="noopener">{source.base_url} &nearr;</a></dd>
+          </div>
+          {source.rss_url && (
+            <div>
+              <dt>RSS Feed Endpoint</dt>
+              <dd><code>{source.rss_url}</code></dd>
+            </div>
+          )}
+          <div>
+            <dt>Target Category</dt>
+            <dd>{source.category_name || '— Unclassified —'}</dd>
+          </div>
+          <div>
+            <dt>Fetch Frequency</dt>
+            <dd>Every {source.fetch_interval / 60} minutes</dd>
+          </div>
+          <div>
+            <dt>Priority Rank</dt>
+            <dd>Priority {source.priority}</dd>
+          </div>
+        </dl>
+
+        <div class="status-toggle-box">
+          <span class="toggle-label">Status Control:</span>
+          <form action="/admin/sources/status" method="POST" class="status-toggle-form">
+            <input type="hidden" name="id" value={source.id} />
+            <input type="hidden" name="return_to" value={`/admin/sources/${source.id}`} />
+            {source.status === 'active' ? (
+              <button type="submit" name="status" value="paused" class="btn btn-secondary btn-xs">
+                Pause Ingestion
+              </button>
+            ) : (
+              <button type="submit" name="status" value="active" class="btn btn-secondary btn-xs">
+                Activate Ingestion
+              </button>
+            )}
+            {source.status !== 'disabled' && (
+              <button type="submit" name="status" value="disabled" class="btn btn-danger btn-xs" onclick="return confirm('Disable this source?');">
+                Disable
+              </button>
+            )}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Ingestion Jobs -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Recent Ingestion Jobs</h2>
+      </div>
+      <div class="panel-body">
+        {jobs.length === 0 ? (
+          <p class="empty-hint">No ingestion jobs have been run yet.</p>
+        ) : (
+          <div class="table-responsive">
+            <table class="sub-table">
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Status</th>
+                  <th>New / Dupes</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr>
+                    <td><code>{job.id.slice(0, 14)}</code></td>
+                    <td>
+                      <span class:list={[
+                        'badge',
+                        job.status === 'completed' ? 'badge-success' :
+                        job.status === 'running' ? 'badge-warning' : 'badge-danger'
+                      ]}>
+                        {job.status}
+                      </span>
+                    </td>
+                    <td>+{job.items_new} / {job.items_duplicate}d</td>
+                    <td><span class="date-text">{formatDate(job.started_at)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <!-- Ingested Source Items Section -->
+  <div class="items-section">
+    <div class="section-header">
+      <h2 class="section-title">Ingested Research Items ({itemsData.total})</h2>
+    </div>
+
+    {itemsData.items.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No source items have been collected yet.</p>
+        <span class="empty-subtext">Trigger a manual fetch to ingest initial research items from this feed.</span>
+      </div>
+    ) : (
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Item Title</th>
+                <th>Status</th>
+                <th>Author</th>
+                <th>Published</th>
+                <th>Last Seen</th>
+                <th class="text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemsData.items.map((item) => (
+                <tr>
+                  <td>
+                    <a href={`/admin/sources/${source.id}/items/${item.id}`} class="source-title-link">
+                      {item.title}
+                    </a>
+                    <span class="source-url-hint">{item.canonical_url}</span>
+                  </td>
+                  <td>
+                    <span class:list={[
+                      'badge',
+                      item.status === 'new' ? 'badge-success' :
+                      item.status === 'processed' ? 'badge-neutral' : 'badge-warning'
+                    ]}>
+                      {item.status}
+                    </span>
+                  </td>
+                  <td>{item.author || '—'}</td>
+                  <td><span class="date-text">{formatDate(item.published_at)}</span></td>
+                  <td><span class="date-text">{formatDate(item.last_seen_at)}</span></td>
+                  <td class="text-right">
+                    <a href={`/admin/sources/${source.id}/items/${item.id}`} class="btn btn-secondary btn-xs">
+                      Inspect
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .stat-val {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+
+  .stat-val-date {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .stat-val-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0.25rem 0;
+  }
+
+  .stat-sub {
+    font-size: 0.8125rem;
+    color: var(--color-text-dim);
+  }
+
+  .stat-detail {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .error-banner {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    margin-bottom: 2rem;
+  }
+
+  .error-time {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+  }
+
+  .dashboard-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+  }
+
+  .panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .panel-title {
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  .panel-body {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .meta-dl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .meta-dl dt {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+  }
+
+  .meta-dl dd {
+    margin-left: 0;
+    color: var(--color-text-main);
+  }
+
+  .status-toggle-box {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .toggle-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .status-toggle-form {
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  .sub-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+  }
+
+  .sub-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .sub-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--color-surface-subtle);
+  }
+
+  .items-section {
+    margin-top: 2rem;
+  }
+
+  .section-header {
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .source-title-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .source-title-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .source-url-hint {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    display: block;
+    margin-top: 0.15rem;
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .date-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-hint {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-box {
+    background-color: var(--color-surface);
+    border: 1px dashed var(--color-border-dark);
+    border-radius: var(--radius-md);
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 860px) {
+    .dashboard-panels {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

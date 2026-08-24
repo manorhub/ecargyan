@@ -1,0 +1,141 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+import { getUniqueSlug } from '../../../../lib/db/slug';
+import { validateAuthorInput } from '../../../../lib/utils/validation';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/authors', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/authors', 302);
+
+const author = await dbService.getAuthorById(id);
+if (!author) return Astro.redirect('/admin/authors', 302);
+
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const name = (formData.get('name') as string || '').trim();
+    const customSlug = (formData.get('slug') as string || '').trim();
+    const bio = (formData.get('bio') as string || '').trim();
+    const status = (formData.get('status') as string || 'active') === 'inactive' ? 'inactive' : 'active';
+
+    const validation = validateAuthorInput({ name });
+    if (!validation.valid) {
+      errorMessage = validation.errors.name || 'Validation error.';
+    } else {
+      const slug = customSlug
+        ? await getUniqueSlug(runtimeEnv!.DB, 'authors', customSlug, id)
+        : await getUniqueSlug(runtimeEnv!.DB, 'authors', name, id);
+
+      await dbService.updateAuthor(id, {
+        name,
+        slug,
+        bio: bio || null,
+        status,
+      });
+
+      if (Astro.locals.admin) {
+        await dbService.logAudit(Astro.locals.admin.id, 'update_author', 'author', id, { name, slug, status });
+      }
+
+      return Astro.redirect('/admin/authors', 302);
+    }
+  } catch (err) {
+    errorMessage = 'Failed to update author.';
+  }
+}
+---
+
+<AdminLayout title={`Edit Author: ${author.name}`} currentPath="/admin/authors">
+  <div class="page-header">
+    <a href="/admin/authors" class="back-link">&larr; Back to Authors</a>
+    <h1 class="page-title">Edit Author Profile</h1>
+  </div>
+
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <div class="edit-card">
+    <form method="POST" class="author-form">
+      <div class="form-group">
+        <label for="name" class="form-label">Full Name *</label>
+        <input type="text" id="name" name="name" class="form-input" value={author.name} required />
+      </div>
+
+      <div class="form-group">
+        <label for="slug" class="form-label">Slug</label>
+        <input type="text" id="slug" name="slug" class="form-input" value={author.slug} required />
+      </div>
+
+      <div class="form-group">
+        <label for="bio" class="form-label">Biography</label>
+        <textarea id="bio" name="bio" class="form-input" rows="4">{author.bio || ''}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="status" class="form-label">Status</label>
+        <select id="status" name="status" class="form-input">
+          <option value="active" selected={author.status === 'active'}>Active</option>
+          <option value="inactive" selected={author.status === 'inactive'}>Inactive</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="/admin/authors" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+  }
+
+  .edit-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    max-width: 600px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

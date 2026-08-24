@@ -1,0 +1,463 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get('status') || '';
+const jobTypeFilter = url.searchParams.get('type') || '';
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+let jobsData = { jobs: [] as any[], total: 0 };
+let settings: Record<string, string> = {};
+
+if (dbService) {
+  [jobsData, settings] = await Promise.all([
+    dbService.listAutomationJobs({
+      status: statusFilter || undefined,
+      jobType: jobTypeFilter || undefined,
+      limit: 25,
+      offset: 0,
+    }),
+    dbService.getAutomationSettings(),
+  ]);
+}
+
+const isRunning = (settings['global_status'] || 'running') === 'running';
+const autoPublishEnabled = settings['auto_publish'] === 'true';
+
+function formatDate(ts: number | null): string {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title="Automation Engine" currentPath="/admin/automation">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Cloudflare Automation Pipeline</h1>
+      <p class="page-description">
+        Autonomous Cron, Queue consumers, DeepSeek editorial drafting, and publishing guard controls.
+      </p>
+    </div>
+    <div class="header-actions">
+      <form action="/admin/automation/trigger" method="POST" style="display:inline;">
+        <button type="submit" class="btn btn-primary" disabled={!isRunning}>
+          Trigger Pipeline Cycle Now
+        </button>
+      </form>
+      <form action="/admin/automation/toggle" method="POST" style="display:inline;">
+        <input type="hidden" name="key" value="global_status" />
+        <input type="hidden" name="value" value={isRunning ? 'paused' : 'running'} />
+        <button type="submit" class:list={['btn', isRunning ? 'btn-secondary' : 'btn-primary']}>
+          {isRunning ? 'Pause Automation' : 'Resume Automation'}
+        </button>
+      </form>
+      <a href="/admin/automation/settings" class="btn btn-secondary">Pipeline Settings</a>
+      <a href="/admin/automation/history" class="btn btn-secondary">Audit Logs</a>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Pipeline Health & Stage Toggles Grid -->
+  <div class="pipeline-status-card">
+    <div class="pipeline-main-status">
+      <span class="status-indicator-dot" class:list={[{ 'dot-running': isRunning, 'dot-paused': !isRunning }]}></span>
+      <div>
+        <span class="pipeline-status-title">
+          Master Automation: <strong>{isRunning ? 'RUNNING' : 'PAUSED'}</strong>
+        </span>
+        <span class="pipeline-status-sub">
+          {isRunning ? 'Scheduled Cron jobs and queue workers are active.' : 'All automated scheduling and AI operations are suspended.'}
+        </span>
+      </div>
+    </div>
+
+    <div class="stage-switches-strip">
+      <div class="stage-badge-item">
+        <span class="stage-label">Source Ingestion</span>
+        <span class:list={['badge', settings['stage_ingestion'] !== 'false' ? 'badge-success' : 'badge-neutral']}>
+          {settings['stage_ingestion'] !== 'false' ? 'ACTIVE' : 'OFF'}
+        </span>
+      </div>
+
+      <div class="stage-badge-item">
+        <span class="stage-label">Processing</span>
+        <span class:list={['badge', settings['stage_processing'] !== 'false' ? 'badge-success' : 'badge-neutral']}>
+          {settings['stage_processing'] !== 'false' ? 'ACTIVE' : 'OFF'}
+        </span>
+      </div>
+
+      <div class="stage-badge-item">
+        <span class="stage-label">AI Drafting</span>
+        <span class:list={['badge', settings['stage_ai_generation'] !== 'false' ? 'badge-success' : 'badge-neutral']}>
+          {settings['stage_ai_generation'] !== 'false' ? 'ACTIVE' : 'OFF'}
+        </span>
+      </div>
+
+      <div class="stage-badge-item">
+        <span class="stage-label">Auto Publish</span>
+        <span class:list={['badge', autoPublishEnabled ? 'badge-danger' : 'badge-neutral']}>
+          {autoPublishEnabled ? 'ENABLED' : 'OFF (Review Mode)'}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Panel -->
+  <div class="filter-panel">
+    <form method="GET" class="filter-form">
+      <div class="filter-group">
+        <select name="status" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Job Statuses</option>
+          <option value="pending" selected={statusFilter === 'pending'}>Pending</option>
+          <option value="processing" selected={statusFilter === 'processing'}>Processing</option>
+          <option value="completed" selected={statusFilter === 'completed'}>Completed</option>
+          <option value="failed" selected={statusFilter === 'failed'}>Failed</option>
+          <option value="dead_letter" selected={statusFilter === 'dead_letter'}>Dead Letter</option>
+          <option value="cancelled" selected={statusFilter === 'cancelled'}>Cancelled</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <select name="type" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Job Types</option>
+          <option value="source_ingestion" selected={jobTypeFilter === 'source_ingestion'}>Source Ingestion</option>
+          <option value="content_processing" selected={jobTypeFilter === 'content_processing'}>Content Processing</option>
+          <option value="ai_generation" selected={jobTypeFilter === 'ai_generation'}>AI Generation</option>
+          <option value="article_publish" selected={jobTypeFilter === 'article_publish'}>Article Publish</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+      {(statusFilter || jobTypeFilter) && (
+        <a href="/admin/automation" class="btn btn-secondary btn-sm">Reset</a>
+      )}
+    </form>
+  </div>
+
+  <!-- Jobs Table -->
+  <div class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Automation Jobs ({jobsData.total})</h2>
+    </div>
+
+    {jobsData.jobs.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No automation jobs yet.</p>
+        <span class="empty-subtext">Trigger a pipeline cycle or let Cloudflare Cron execute due source evaluations.</span>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Type</th>
+              <th>Entity Target</th>
+              <th>Attempts</th>
+              <th>Status</th>
+              <th>Scheduled</th>
+              <th class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobsData.jobs.map((job) => (
+              <tr>
+                <td>
+                  <a href={`/admin/automation/jobs/${job.id}`} class="job-id-link">
+                    {job.id}
+                  </a>
+                </td>
+                <td>
+                  <span class="task-badge">{job.job_type.toUpperCase()}</span>
+                </td>
+                <td>
+                  <span class="entity-name">{job.entity_name || job.entity_id}</span>
+                  <span class="entity-type">({job.entity_type})</span>
+                </td>
+                <td>
+                  <span class="attempts-text">{job.attempts} / {job.max_attempts}</span>
+                </td>
+                <td>
+                  <span class:list={[
+                    'badge',
+                    job.status === 'completed' ? 'badge-success' :
+                    job.status === 'processing' ? 'badge-warning' :
+                    job.status === 'dead_letter' ? 'badge-danger' :
+                    job.status === 'failed' ? 'badge-danger' : 'badge-neutral'
+                  ]}>
+                    {job.status.toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <span class="date-text">{formatDate(job.scheduled_at)}</span>
+                </td>
+                <td class="text-right">
+                  <a href={`/admin/automation/jobs/${job.id}`} class="btn btn-secondary btn-xs">
+                    Inspect
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .pipeline-status-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .pipeline-main-status {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .status-indicator-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--color-danger);
+  }
+
+  .status-indicator-dot.dot-running {
+    background-color: var(--color-success);
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+  }
+
+  .pipeline-status-title {
+    font-size: 1.0625rem;
+    display: block;
+  }
+
+  .pipeline-status-sub {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: block;
+  }
+
+  .stage-switches-strip {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .stage-badge-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: flex-start;
+  }
+
+  .stage-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+  }
+
+  .filter-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .filter-select {
+    width: auto;
+    min-width: 150px;
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .job-id-link {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-text-main);
+    font-size: 0.75rem;
+  }
+
+  .job-id-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .task-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .entity-name {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: inline-block;
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .entity-type {
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    margin-left: 0.25rem;
+  }
+
+  .attempts-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .date-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

@@ -1,0 +1,64 @@
+---
+interface Props {
+  title?: string;
+  message?: string;
+  actionText?: string;
+  actionHref?: string;
+}
+
+const {
+  title = 'No articles yet.',
+  message = 'The editorial dispatch queue is currently empty. Published intelligence and reports will appear here once ready.',
+  actionText,
+  actionHref,
+} = Astro.props;
+---
+
+<div class="empty-state">
+  <div class="empty-marker" aria-hidden="true">&mdash; &sect; &mdash;</div>
+  <h2 class="empty-title">{title}</h2>
+  <p class="empty-message">{message}</p>
+  {actionText && actionHref && (
+    <div class="empty-action">
+      <a href={actionHref} class="btn btn-secondary">{actionText}</a>
+    </div>
+  )}
+</div>
+
+<style>
+  .empty-state {
+    padding: 4rem 2rem;
+    text-align: center;
+    border: 1px dashed var(--color-border-dark);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    margin: 2rem 0;
+  }
+
+  .empty-marker {
+    color: var(--color-text-dim);
+    font-family: var(--font-serif);
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    letter-spacing: 0.2em;
+  }
+
+  .empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--color-text-main);
+  }
+
+  .empty-message {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  .empty-action {
+    margin-top: 1.5rem;
+  }
+</style>

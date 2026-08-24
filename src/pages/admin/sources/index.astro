@@ -1,0 +1,376 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get('status') || '';
+const typeFilter = url.searchParams.get('type') || '';
+const search = url.searchParams.get('q') || '';
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+let sourcesData = { sources: [] as any[], total: 0 };
+
+if (dbService) {
+  sourcesData = await dbService.listSources({
+    status: statusFilter || undefined,
+    type: typeFilter || undefined,
+    search: search || undefined,
+    limit: 50,
+    offset: 0,
+  });
+}
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Never';
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getHealthBadge(source: any): { label: string; class: string } {
+  if (source.status === 'disabled') return { label: 'Disabled', class: 'badge-neutral' };
+  if (source.status === 'paused') return { label: 'Paused', class: 'badge-warning' };
+  if (source.status === 'error' || source.consecutive_errors >= 3) return { label: 'Failing', class: 'badge-danger' };
+  if (source.consecutive_errors > 0) return { label: 'Warning', class: 'badge-warning' };
+  if (source.last_success_at) return { label: 'Healthy', class: 'badge-success' };
+  return { label: 'Untested', class: 'badge-neutral' };
+}
+---
+
+<AdminLayout title="Sources Registry" currentPath="/admin/sources">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Research & Source Registry</h1>
+      <p class="page-description">
+        Configure external RSS/Atom feeds, technical wire services, and research sources for automated editorial ingestion.
+      </p>
+    </div>
+    <div>
+      <a href="/admin/sources/new" class="btn btn-primary">Add Source</a>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <div class="filter-panel">
+    <form method="GET" class="filter-form">
+      <div class="filter-group">
+        <input
+          type="search"
+          name="q"
+          value={search}
+          placeholder="Search sources by name or URL..."
+          class="form-input filter-search"
+        />
+      </div>
+
+      <div class="filter-group">
+        <select name="status" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Statuses</option>
+          <option value="active" selected={statusFilter === 'active'}>Active</option>
+          <option value="paused" selected={statusFilter === 'paused'}>Paused</option>
+          <option value="error" selected={statusFilter === 'error'}>Error / Failing</option>
+          <option value="disabled" selected={statusFilter === 'disabled'}>Disabled</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <select name="type" class="form-input filter-select" onchange="this.form.submit()">
+          <option value="">All Types</option>
+          <option value="rss" selected={typeFilter === 'rss'}>RSS / Atom</option>
+          <option value="website" selected={typeFilter === 'website'}>Website</option>
+          <option value="api" selected={typeFilter === 'api'}>API</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+      {(statusFilter || typeFilter || search) && (
+        <a href="/admin/sources" class="btn btn-secondary btn-sm">Reset</a>
+      )}
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Configured Sources ({sourcesData.total})</h2>
+    </div>
+
+    {sourcesData.sources.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No sources configured yet.</p>
+        <span class="empty-subtext">Add RSS feeds or automotive wire services to begin ingesting research items.</span>
+        <div class="empty-action">
+          <a href="/admin/sources/new" class="btn btn-secondary">Configure First Source</a>
+        </div>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Source Name</th>
+              <th>Type</th>
+              <th>Health</th>
+              <th>Items (New / Dupes)</th>
+              <th>Last Ingested</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sourcesData.sources.map((src) => {
+              const health = getHealthBadge(src);
+              return (
+                <tr>
+                  <td>
+                    <a href={`/admin/sources/${src.id}`} class="source-title-link">
+                      {src.name}
+                    </a>
+                    <span class="source-url-hint">{src.rss_url || src.base_url}</span>
+                  </td>
+                  <td>
+                    <span class="type-badge">{src.source_type.toUpperCase()}</span>
+                  </td>
+                  <td>
+                    <span class:list={['badge', health.class]}>{health.label}</span>
+                  </td>
+                  <td>
+                    <div class="items-count-cell">
+                      <strong>{src.total_items || 0}</strong> total
+                      {src.duplicate_items > 0 && (
+                        <span class="dupe-count">({src.duplicate_items} dupes)</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="date-text">{formatDate(src.last_checked_at)}</span>
+                  </td>
+                  <td class="text-right">
+                    <div class="actions-group">
+                      <form action="/admin/sources/fetch" method="POST" style="display:inline;">
+                        <input type="hidden" name="id" value={src.id} />
+                        <input type="hidden" name="return_to" value="/admin/sources" />
+                        <button type="submit" class="btn btn-primary btn-xs" title="Trigger instant ingestion">
+                          Fetch Now
+                        </button>
+                      </form>
+                      <a href={`/admin/sources/${src.id}`} class="btn btn-secondary btn-xs">
+                        Details
+                      </a>
+                      <a href={`/admin/sources/${src.id}/edit`} class="btn btn-secondary btn-xs">
+                        Edit
+                      </a>
+                      <form action="/admin/sources/delete" method="POST" style="display:inline;" onsubmit="return confirm('Delete this source and all associated ingested items?');">
+                        <input type="hidden" name="id" value={src.id} />
+                        <button type="submit" class="btn btn-danger btn-xs">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .filter-panel {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .filter-search {
+    min-width: 260px;
+  }
+
+  .filter-select {
+    width: auto;
+    min-width: 140px;
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .source-title-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: block;
+  }
+
+  .source-title-link:hover {
+    color: var(--color-accent-blue);
+  }
+
+  .source-url-hint {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    display: block;
+    margin-top: 0.15rem;
+    max-width: 360px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .type-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    padding: 0.15rem 0.4rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .items-count-cell {
+    font-size: 0.8125rem;
+  }
+
+  .dupe-count {
+    color: var(--color-text-dim);
+    font-size: 0.75rem;
+  }
+
+  .date-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .actions-group {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-action {
+    margin-top: 1.5rem;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

@@ -1,0 +1,270 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin', 302);
+
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+let failedJobs: any[] = [];
+if (runtimeEnv?.DB) {
+  const { results } = await runtimeEnv.DB
+    .prepare("SELECT * FROM automation_jobs WHERE status IN ('failed', 'dead_letter') ORDER BY updated_at DESC LIMIT 50")
+    .all<any>();
+  failedJobs = results || [];
+}
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+---
+
+<AdminLayout title="Failed Jobs Center" currentPath="/admin/automation">
+  <div class="page-header">
+    <div>
+      <a href="/admin/automation" class="back-link">&larr; Back to Automation Overview</a>
+      <h1 class="page-title">Failed & Dead-Letter Jobs Center</h1>
+      <p class="page-description">
+        Diagnose and retry unhandled failures across source ingestion, research pooling, and AI drafts.
+      </p>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <div class="table-card">
+    <div class="card-header-row">
+      <h2 class="card-title">Failed Pipeline Executions ({failedJobs.length})</h2>
+    </div>
+
+    {failedJobs.length === 0 ? (
+      <div class="empty-box">
+        <span class="check-badge">✓</span>
+        <p class="empty-text">Zero failed jobs.</p>
+        <span class="empty-subtext">All background tasks across ingestion and AI processing are executing cleanly.</span>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Job ID & Stage</th>
+              <th>Status</th>
+              <th>Attempts</th>
+              <th>Error Details</th>
+              <th>Failed At</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {failedJobs.map((j) => (
+              <tr>
+                <td>
+                  <a href={`/admin/automation/jobs/${j.id}`} class="job-id-link mono">
+                    {j.id}
+                  </a>
+                  <span class="job-type-tag">{j.job_type}</span>
+                </td>
+                <td>
+                  <span class:list={[
+                    'badge',
+                    j.status === 'dead_letter' ? 'badge-danger' : 'badge-warning'
+                  ]}>
+                    {j.status.toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <span class="attempts-text">{j.attempts}/{j.max_attempts}</span>
+                </td>
+                <td>
+                  <span class="error-msg">{j.error_message || 'Unhandled task exception'}</span>
+                </td>
+                <td>
+                  <span class="date-text">{formatDate(j.updated_at)}</span>
+                </td>
+                <td class="text-right">
+                  <div class="action-buttons">
+                    <form action="/admin/automation/jobs/retry" method="POST" style="display:inline;">
+                      <input type="hidden" name="job_id" value={j.id} />
+                      <button type="submit" class="btn btn-primary btn-xs">
+                        Retry Now
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header-row {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .job-id-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: block;
+    font-size: 0.8125rem;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  .job-type-tag {
+    font-size: 0.6875rem;
+    color: var(--color-text-dim);
+    display: block;
+  }
+
+  .error-msg {
+    color: var(--color-danger);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    display: block;
+    max-width: 380px;
+    word-break: break-all;
+  }
+
+  .attempts-text, .date-text {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .check-badge {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin-bottom: 0.75rem;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>

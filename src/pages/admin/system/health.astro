@@ -1,0 +1,278 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { SystemHealthProbe } from '../../../lib/admin/health';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const probe = new SystemHealthProbe(runtimeEnv?.DB, runtimeEnv?.MEDIA, runtimeEnv);
+const health = await probe.checkHealth();
+
+function formatTime(ts: number): string {
+  return new Date(ts).toISOString();
+}
+---
+
+<AdminLayout title="System Health & Diagnostics" currentPath="/admin/system/health">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">System Health & Diagnostics</h1>
+      <p class="page-description">Live verification of Cloudflare bindings, D1 database execution, and AI engine status.</p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/system/health" class="btn btn-secondary">Run Diagnostics Again &orarr;</a>
+    </div>
+  </div>
+
+  <!-- Overall Status Banner -->
+  <div class="status-banner" class:list={[
+    health.overall === 'healthy' ? 'banner-healthy' :
+    health.overall === 'warning' ? 'banner-warning' : 'banner-degraded'
+  ]}>
+    <div class="banner-content">
+      <span class="banner-title">
+        {health.overall === 'healthy' && 'All Systems Operational'}
+        {health.overall === 'warning' && 'System Running with Warnings'}
+        {health.overall === 'degraded' && 'System Performance Degraded'}
+      </span>
+      <span class="banner-subtext">Diagnostics evaluated at {formatTime(health.timestamp)} (Environment: {health.environment})</span>
+    </div>
+  </div>
+
+  <!-- Detailed Diagnostics Cards -->
+  <div class="diagnostics-grid">
+    <!-- 1. D1 Database -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Cloudflare D1 Database</h2>
+        <span class:list={['badge', health.d1Database.status === 'healthy' ? 'badge-success' : 'badge-danger']}>
+          {health.d1Database.status.toUpperCase()}
+        </span>
+      </div>
+      <div class="probe-details">
+        <div class="detail-row">
+          <span class="detail-label">Ping Latency</span>
+          <span class="detail-val mono">{health.d1Database.latencyMs} ms</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Discovered Tables</span>
+          <span class="detail-val mono">{health.d1Database.tableCount} tables</span>
+        </div>
+        {health.d1Database.error && (
+          <div class="error-box">
+            <strong>Error:</strong> {health.d1Database.error}
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- 2. R2 Media Storage -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Cloudflare R2 Media Storage</h2>
+        <span class:list={[
+          'badge',
+          health.r2Media.status === 'healthy' ? 'badge-success' :
+          health.r2Media.status === 'not_configured' ? 'badge-neutral' : 'badge-danger'
+        ]}>
+          {health.r2Media.status.toUpperCase()}
+        </span>
+      </div>
+      <div class="probe-details">
+        <div class="detail-row">
+          <span class="detail-label">Bucket Binding (MEDIA)</span>
+          <span class="detail-val">{health.r2Media.bucketConfigured ? 'Bound' : 'Not Bound'}</span>
+        </div>
+        {health.r2Media.error && (
+          <div class="warning-box">
+            {health.r2Media.error}
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- 3. DeepSeek AI Engine -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">DeepSeek AI Editorial Engine</h2>
+        <span class:list={[
+          'badge',
+          health.deepseekApi.status === 'healthy' ? 'badge-success' :
+          health.deepseekApi.status === 'not_configured' ? 'badge-neutral' : 'badge-danger'
+        ]}>
+          {health.deepseekApi.status.toUpperCase()}
+        </span>
+      </div>
+      <div class="probe-details">
+        <div class="detail-row">
+          <span class="detail-label">API Key Configuration</span>
+          <span class="detail-val">{health.deepseekApi.keyConfigured ? 'Configured' : 'Missing'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Active Model</span>
+          <span class="detail-val mono">{health.deepseekApi.model}</span>
+        </div>
+        {health.deepseekApi.error && (
+          <div class="warning-box">
+            {health.deepseekApi.error}
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- 4. Automation Engine -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Automation Engine & Queue</h2>
+        <span class:list={['badge', health.automation.status === 'running' ? 'badge-success' : 'badge-danger']}>
+          {health.automation.status.toUpperCase()}
+        </span>
+      </div>
+      <div class="probe-details">
+        <div class="detail-row">
+          <span class="detail-label">Queued Jobs</span>
+          <span class="detail-val mono">{health.automation.pendingJobs}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Failed Jobs</span>
+          <span class="detail-val mono">{health.automation.failedJobs}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Dead-Letter Jobs</span>
+          <span class="detail-val mono">{health.automation.deadLetterJobs}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .status-banner {
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 2rem;
+    border: 1px solid transparent;
+  }
+
+  .banner-healthy {
+    background-color: var(--color-success-bg);
+    border-color: #bbf7d0;
+    color: var(--color-success);
+  }
+
+  .banner-warning {
+    background-color: var(--color-warning-bg);
+    border-color: #fef08a;
+    color: var(--color-warning);
+  }
+
+  .banner-degraded {
+    background-color: var(--color-danger-bg);
+    border-color: #fecaca;
+    color: var(--color-danger);
+  }
+
+  .banner-title {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .banner-subtext {
+    font-size: 0.8125rem;
+    opacity: 0.9;
+  }
+
+  .diagnostics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .probe-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+  }
+
+  .detail-label {
+    color: var(--color-text-muted);
+  }
+
+  .detail-val {
+    font-weight: 600;
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+  }
+
+  .error-box {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+  }
+
+  .warning-box {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 900px) {
+    .diagnostics-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

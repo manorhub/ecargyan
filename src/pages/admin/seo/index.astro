@@ -1,0 +1,402 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { SeoAuditor } from '../../../lib/seo/audit';
+import type { SeoAuditSummary } from '../../../lib/seo/types';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+
+let audit: SeoAuditSummary = {
+  totalPublishedArticles: 0,
+  missingMetaDescription: [],
+  orphanArticles: [],
+  brokenLinks: [],
+  redirectLoops: [],
+  thinTaxonomies: [],
+  staleArticles: [],
+};
+
+if (runtimeEnv?.DB) {
+  const auditor = new SeoAuditor(runtimeEnv.DB);
+  audit = await auditor.runAudit();
+}
+
+const totalIssues =
+  audit.missingMetaDescription.length +
+  audit.orphanArticles.length +
+  audit.brokenLinks.length +
+  audit.redirectLoops.length +
+  audit.thinTaxonomies.length;
+---
+
+<AdminLayout title="SEO & Technical Health" currentPath="/admin/seo">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Technical SEO & Internal Health</h1>
+      <p class="page-description">
+        Deterministic site-wide audit for metadata completeness, internal link topology, redirects, and thin taxonomies.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/seo/redirects" class="btn btn-secondary">301 Redirects</a>
+      <a href="/admin/seo/freshness" class="btn btn-secondary">Content Freshness</a>
+      <a href="/sitemap.xml" target="_blank" class="btn btn-secondary">View Sitemap Index &rarr;</a>
+    </div>
+  </div>
+
+  <div class="gsc-disclaimer">
+    ℹ️ <strong>Audit Methodology:</strong> Internal deterministic checklist based on actual D1 database records. Search performance data is unavailable until Google Search Console is connected.
+  </div>
+
+  <!-- Metric Overview Cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Published Articles</span>
+      <span class="stat-value">{audit.totalPublishedArticles}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-warning': audit.missingMetaDescription.length > 0 }]}>
+      <span class="stat-label">Missing Meta Descriptions</span>
+      <span class="stat-value">{audit.missingMetaDescription.length}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-warning': audit.orphanArticles.length > 0 }]}>
+      <span class="stat-label">Orphan Articles (0 Inbound Links)</span>
+      <span class="stat-value">{audit.orphanArticles.length}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-danger': audit.brokenLinks.length > 0 }]}>
+      <span class="stat-label">Broken Internal Links</span>
+      <span class="stat-value">{audit.brokenLinks.length}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-warning': audit.thinTaxonomies.length > 0 }]}>
+      <span class="stat-label">Thin Taxonomies (0 Posts)</span>
+      <span class="stat-value">{audit.thinTaxonomies.length}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-warning': audit.staleArticles.length > 0 }]}>
+      <span class="stat-label">Stale Articles (>180d Old)</span>
+      <span class="stat-value">{audit.staleArticles.length}</span>
+    </div>
+  </div>
+
+  <!-- Audit Issue Breakdown -->
+  {totalIssues === 0 ? (
+    <div class="clean-audit-box">
+      <span class="check-icon">✓</span>
+      <h3>No SEO issues detected.</h3>
+      <p>All published articles have meta descriptions, valid canonical slugs, inbound internal links, and clean redirects.</p>
+    </div>
+  ) : (
+    <div class="issues-container">
+      <!-- Missing Meta Descriptions -->
+      {audit.missingMetaDescription.length > 0 && (
+        <div class="card">
+          <div class="card-header-row">
+            <h2 class="card-title">Missing Meta Descriptions ({audit.missingMetaDescription.length})</h2>
+            <span class="badge badge-warning">Action Recommended</span>
+          </div>
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Article Title</th>
+                  <th>URL Slug</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.missingMetaDescription.map((art) => (
+                  <tr>
+                    <td><strong>{art.title}</strong></td>
+                    <td><code>/article/{art.slug}</code></td>
+                    <td class="text-right">
+                      <a href={`/admin/articles/${art.id}/edit`} class="btn btn-secondary btn-xs">
+                        Add SEO Meta
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <!-- Broken Internal Links -->
+      {audit.brokenLinks.length > 0 && (
+        <div class="card">
+          <div class="card-header-row">
+            <h2 class="card-title">Broken Internal Links ({audit.brokenLinks.length})</h2>
+            <span class="badge badge-danger">High Priority</span>
+          </div>
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Source Article</th>
+                  <th>Target URL</th>
+                  <th>Anchor Text</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.brokenLinks.map((link) => (
+                  <tr>
+                    <td><strong>{link.sourceTitle}</strong></td>
+                    <td><code>{link.brokenUrl}</code></td>
+                    <td><em>"{link.anchorText}"</em></td>
+                    <td class="text-right">
+                      <a href={`/admin/articles/${link.sourceArticleId}/edit`} class="btn btn-secondary btn-xs">
+                        Edit Article
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <!-- Orphan Articles -->
+      {audit.orphanArticles.length > 0 && (
+        <div class="card">
+          <div class="card-header-row">
+            <h2 class="card-title">Orphan Articles ({audit.orphanArticles.length})</h2>
+            <span class="badge badge-neutral">No Inbound Links</span>
+          </div>
+          <p class="section-desc">These published articles have zero incoming links from other ECargyan articles.</p>
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Article Title</th>
+                  <th>URL Slug</th>
+                  <th class="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.orphanArticles.map((art) => (
+                  <tr>
+                    <td><strong>{art.title}</strong></td>
+                    <td><code>/article/{art.slug}</code></td>
+                    <td class="text-right">
+                      <a href={`/admin/articles/${art.id}/edit`} class="btn btn-secondary btn-xs">
+                        Inspect
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <!-- Thin Taxonomy Pages -->
+      {audit.thinTaxonomies.length > 0 && (
+        <div class="card">
+          <div class="card-header-row">
+            <h2 class="card-title">Thin Taxonomy Pages ({audit.thinTaxonomies.length})</h2>
+            <span class="badge badge-neutral">Protected (noindex)</span>
+          </div>
+          <p class="section-desc">Taxonomies with 0 published posts are automatically excluded from sitemaps and set to <code>noindex</code> to protect domain quality.</p>
+          <div class="table-responsive">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Taxonomy Type</th>
+                  <th>Name</th>
+                  <th>Slug</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.thinTaxonomies.map((tax) => (
+                  <tr>
+                    <td><span class="badge badge-neutral">{tax.type.toUpperCase()}</span></td>
+                    <td><strong>{tax.name}</strong></td>
+                    <td><code>/{tax.type}/{tax.slug}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .gsc-disclaimer {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .stat-card.stat-warning {
+    border-left: 3px solid var(--color-warning);
+  }
+
+  .stat-card.stat-danger {
+    border-left: 3px solid var(--color-danger);
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+
+  .clean-audit-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .check-icon {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--color-success-bg);
+    color: var(--color-success);
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+  }
+
+  .issues-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+  }
+
+  .section-desc {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .admin-table th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .text-right {
+    text-align: right;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 1100px) {
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

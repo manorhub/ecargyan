@@ -1,0 +1,162 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ArticleCard from '../../components/ui/ArticleCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Pagination from '../../components/ui/Pagination.astro';
+import JsonLd from '../../components/ui/JsonLd.astro';
+import { getDb } from '../../lib/db/client';
+import { generateBreadcrumbJsonLd } from '../../lib/utils/json-ld';
+import { getCanonicalUrl } from '../../lib/config/site';
+import type { ArticleWithRelations } from '../../lib/db/schema';
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect('/404', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/500', 302);
+
+const category = await dbService.getCategoryBySlug(slug);
+if (!category || category.status !== 'active') {
+  return Astro.redirect('/404', 302);
+}
+
+const url = new URL(Astro.request.url);
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 9;
+const offset = (page - 1) * pageSize;
+
+const { articles, total } = await dbService.getPublishedArticles({
+  categorySlug: slug,
+  limit: pageSize,
+  offset,
+});
+
+const totalPages = Math.ceil(total / pageSize) || 1;
+const canonicalUrl = getCanonicalUrl(`/category/${slug}`);
+
+const breadcrumbItems = [
+  { name: 'Categories', url: '/' },
+  { name: category.name, url: `/category/${slug}` },
+];
+
+const breadcrumbSchema = generateBreadcrumbJsonLd(breadcrumbItems);
+---
+
+<BaseLayout
+  seo={{
+    title: `${category.name} Dispatches & Intelligence`,
+    description: category.description || `Read automotive reports, powertrain benchmarks, and editorial insights classified under ${category.name}.`,
+    canonicalUrl,
+  }}
+  currentPath={`/category/${slug}`}
+>
+  <JsonLd schema={breadcrumbSchema} />
+
+  <section class="archive-header-section">
+    <div class="container">
+      <Breadcrumbs items={breadcrumbItems} />
+      <div class="header-inner">
+        <span class="header-kicker">Taxonomy Archive</span>
+        <h1 class="header-title">{category.name}</h1>
+        {category.description && (
+          <p class="header-description">{category.description}</p>
+        )}
+        <span class="count-badge">{total} {total === 1 ? 'Published Dispatch' : 'Published Dispatches'}</span>
+      </div>
+    </div>
+  </section>
+
+  <main class="container archive-main">
+    {total === 0 ? (
+      <EmptyState
+        title={`No published articles in ${category.name} yet.`}
+        message="The editorial pipeline has not published dispatches in this category cluster. Reports will appear here once published."
+        actionText="Return to Latest Dispatches"
+        actionHref="/"
+      />
+    ) : (
+      <>
+        <div class="articles-grid">
+          {articles.map((art: ArticleWithRelations) => (
+            <ArticleCard article={art} variant="standard" />
+          ))}
+        </div>
+
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          baseUrl={`/category/${slug}`}
+        />
+      </>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  .archive-header-section {
+    padding: 3.5rem 0 2.5rem;
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .header-inner {
+    max-width: 760px;
+  }
+
+  .header-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .header-title {
+    font-size: 2.75rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+  }
+
+  .header-description {
+    font-size: 1.0625rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+
+  .count-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    padding: 0.25rem 0.6rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+  }
+
+  .archive-main {
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  .articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    .header-title {
+      font-size: 2rem;
+    }
+
+    .articles-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

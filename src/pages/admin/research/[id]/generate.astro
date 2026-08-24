@@ -1,0 +1,378 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/research', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/research', 302);
+
+const item = await dbService.getResearchItemById(id);
+if (!item) return Astro.redirect('/admin/research', 302);
+
+const [categories, authors, aiSettings] = await Promise.all([
+  dbService.listCategories(),
+  dbService.listAuthors(),
+  dbService.getAiSettings(),
+]);
+
+const apiKeyConfigured = Boolean(
+  (runtimeEnv as any)?.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY
+);
+
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+  const db = runtimeEnv?.DB;
+  const apiKey = (runtimeEnv as any)?.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
+
+  if (!apiKey) {
+    errorMessage = 'DEEPSEEK_API_KEY is not configured in environment bindings.';
+  } else if (!db) {
+    errorMessage = 'Database unavailable.';
+  } else {
+    try {
+      const { EditorialPipeline } = await import('../../../../lib/ai/pipeline');
+      const formData = await Astro.request.formData();
+      const authorId = (formData.get('author_id') as string || '').trim() || undefined;
+      const categoryId = (formData.get('category_id') as string || '').trim() || undefined;
+
+      const pipeline = new EditorialPipeline(db, apiKey);
+      const result = await pipeline.run(id, { authorId, categoryId });
+
+      if (result.success && result.articleId) {
+        const msg = encodeURIComponent(`Original AI draft generated and saved to CMS Review! (Quality score: ${result.quality.overallScore}/100)`);
+        return Astro.redirect(`/admin/articles/${result.articleId}/edit?success=${msg}`, 302);
+      } else {
+        errorMessage = result.error || 'AI generation pipeline failed.';
+      }
+    } catch (err: any) {
+      errorMessage = err.message || 'Generation execution failure.';
+    }
+  }
+}
+---
+
+<AdminLayout title={`Generate Draft: ${item.title}`} currentPath="/admin/research">
+  <div class="page-header">
+    <a href={`/admin/research/${item.id}`} class="back-link">&larr; Back to Research Details</a>
+    <h1 class="page-title">DeepSeek Editorial Draft Generator</h1>
+    <p class="page-description">
+      Synthesize an original, fact-grounded article draft from multi-source research intelligence.
+    </p>
+  </div>
+
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  {!apiKeyConfigured && (
+    <div class="alert alert-warning">
+      <strong>DeepSeek API Key Missing:</strong> Configure <code>DEEPSEEK_API_KEY</code> in Cloudflare Worker environment variables or <code>.env</code> to enable AI drafting.
+    </div>
+  )}
+
+  <div class="workspace-grid">
+    <!-- Left: Research Provenance & Facts -->
+    <div class="research-summary-column">
+      <div class="card">
+        <div class="card-header-row">
+          <h2 class="card-title">Research Source Data</h2>
+          <span class="badge badge-success">{item.source_count} {item.source_count === 1 ? 'source' : 'sources'}</span>
+        </div>
+
+        <h3 class="item-title">{item.title}</h3>
+        {item.summary && <p class="item-summary">{item.summary}</p>}
+
+        <div class="facts-section">
+          <span class="section-label">Verified Extracted Facts:</span>
+          {item.facts.length === 0 ? (
+            <p class="empty-facts">No specific specs extracted. AI will use raw body text.</p>
+          ) : (
+            <ul class="facts-list">
+              {item.facts.map((f: any) => (
+                <li class="fact-item">
+                  <span class="fact-bullet">•</span>
+                  <span>{f.fact}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div class="sources-section">
+          <span class="section-label">Source Outlets:</span>
+          <div class="sources-tag-list">
+            {item.sources.map((s: any) => (
+              <span class="source-tag">{s.source_name}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Generation Configuration & Form -->
+    <div class="config-column">
+      <form action={`/admin/research/${item.id}/generate`} method="POST" class="generate-form">
+        <div class="card">
+          <h2 class="card-title">Editorial Assignment</h2>
+
+          <div class="form-group">
+            <label for="category_id" class="form-label">Target Publication Category</label>
+            <select id="category_id" name="category_id" class="form-input">
+              <option value="">— Select Category —</option>
+              {categories.map((c) => (
+                <option value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="author_id" class="form-label">Editorial Byline (Author)</label>
+            <select id="author_id" name="author_id" class="form-input">
+              <option value="">— Editorial Team —</option>
+              {authors.map((a) => (
+                <option value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="meta-params-box">
+            <div class="param-row">
+              <span class="param-label">Model:</span>
+              <span class="param-val">{aiSettings['model'] || 'deepseek-chat'}</span>
+            </div>
+            <div class="param-row">
+              <span class="param-label">Word Target:</span>
+              <span class="param-val">~{aiSettings['target_word_count'] || '1200'} words</span>
+            </div>
+            <div class="param-row">
+              <span class="param-label">Pipeline:</span>
+              <span class="param-val">Plan &rarr; Draft &rarr; SEO &rarr; Quality Audit</span>
+            </div>
+            <div class="param-row">
+              <span class="param-label">Output Status:</span>
+              <span class="badge badge-warning">Review (CMS Draft)</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button
+              type="submit"
+              class="btn btn-primary btn-block"
+              disabled={!apiKeyConfigured}
+            >
+              Generate Editorial Draft
+            </button>
+            <a href={`/admin/research/${item.id}`} class="btn btn-secondary btn-block">
+              Cancel
+            </a>
+          </div>
+
+          <p class="policy-note">
+            🛡️ <strong>Safety Guarantee:</strong> All generated drafts are created with <code>status = 'review'</code>. Zero articles are published automatically.
+          </p>
+        </div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .workspace-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.75rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-header-row .card-title {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .item-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+  }
+
+  .item-summary {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+    padding: 0.875rem 1rem;
+    background-color: var(--color-surface-subtle);
+    border-radius: var(--radius-sm);
+  }
+
+  .section-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .facts-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .facts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.8125rem;
+  }
+
+  .fact-item {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .fact-bullet {
+    color: var(--color-brand-accent);
+    font-weight: bold;
+  }
+
+  .empty-facts {
+    font-size: 0.8125rem;
+    color: var(--color-text-dim);
+  }
+
+  .sources-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .source-tag {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    padding: 0.2rem 0.5rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .meta-params-box {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin: 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .param-label {
+    color: var(--color-text-dim);
+  }
+
+  .param-val {
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .btn-block {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .policy-note {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-warning {
+    background-color: var(--color-warning-bg);
+    color: var(--color-warning);
+    border: 1px solid #fef08a;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 900px) {
+    .workspace-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

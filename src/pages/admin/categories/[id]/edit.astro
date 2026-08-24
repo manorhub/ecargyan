@@ -1,0 +1,159 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+import { getUniqueSlug } from '../../../../lib/db/slug';
+import { validateCategoryInput } from '../../../../lib/utils/validation';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/categories', 302);
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/admin/categories', 302);
+
+const category = await dbService.getCategoryById(id);
+if (!category) return Astro.redirect('/admin/categories', 302);
+
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const name = (formData.get('name') as string || '').trim();
+    const customSlug = (formData.get('slug') as string || '').trim();
+    const description = (formData.get('description') as string || '').trim();
+    const status = (formData.get('status') as string || 'active') === 'inactive' ? 'inactive' : 'active';
+    const sortOrder = parseInt(formData.get('sort_order') as string || '0', 10) || 0;
+
+    const validation = validateCategoryInput({ name });
+    if (!validation.valid) {
+      errorMessage = validation.errors.name || 'Validation error.';
+    } else {
+      const slug = customSlug
+        ? await getUniqueSlug(runtimeEnv!.DB, 'categories', customSlug, id)
+        : await getUniqueSlug(runtimeEnv!.DB, 'categories', name, id);
+
+      await dbService.updateCategory(id, {
+        name,
+        slug,
+        description: description || null,
+        status,
+        sort_order: sortOrder,
+      });
+
+      if (Astro.locals.admin) {
+        await dbService.logAudit(Astro.locals.admin.id, 'update_category', 'category', id, { name, slug, status });
+      }
+
+      return Astro.redirect('/admin/categories', 302);
+    }
+  } catch (err) {
+    errorMessage = 'Failed to update category.';
+  }
+}
+---
+
+<AdminLayout title={`Edit Category: ${category.name}`} currentPath="/admin/categories">
+  <div class="page-header">
+    <a href="/admin/categories" class="back-link">&larr; Back to Categories</a>
+    <h1 class="page-title">Edit Category</h1>
+  </div>
+
+  {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
+
+  <div class="edit-card">
+    <form method="POST" class="category-form">
+      <div class="form-group">
+        <label for="name" class="form-label">Category Name *</label>
+        <input type="text" id="name" name="name" class="form-input" value={category.name} required />
+      </div>
+
+      <div class="form-group">
+        <label for="slug" class="form-label">Slug</label>
+        <input type="text" id="slug" name="slug" class="form-input" value={category.slug} required />
+      </div>
+
+      <div class="form-group">
+        <label for="description" class="form-label">Description</label>
+        <textarea id="description" name="description" class="form-input" rows="3">{category.description || ''}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label for="status" class="form-label">Status</label>
+          <select id="status" name="status" class="form-input">
+            <option value="active" selected={category.status === 'active'}>Active</option>
+            <option value="inactive" selected={category.status === 'inactive'}>Inactive</option>
+          </select>
+        </div>
+
+        <div class="form-group flex-1">
+          <label for="sort_order" class="form-label">Sort Order</label>
+          <input type="number" id="sort_order" name="sort_order" class="form-input" value={category.sort_order} />
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="/admin/categories" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+  }
+
+  .edit-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    max-width: 600px;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .flex-1 {
+    flex: 1;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+  }
+
+  .alert-danger {
+    background-color: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #fecaca;
+  }
+</style>
