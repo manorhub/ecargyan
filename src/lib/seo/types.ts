@@ -59,3 +59,5 @@ export interface SeoAuditSummary {
   thinTaxonomies: Array<{ type: 'category' | 'tag' | 'topic'; name: string; slug: string; count: number }>;
   staleArticles: Array<{ id: string; title: string; slug: string; publishedAt: number; daysSinceUpdate: number }>;
 }
+
+export type { IndexNowResult, IndexNowSubmitOptions } from './indexnow';

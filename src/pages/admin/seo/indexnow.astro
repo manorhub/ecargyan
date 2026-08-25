@@ -1,0 +1,346 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { DEFAULT_INDEXNOW_KEY, DEFAULT_HOST } from '../../../lib/seo/indexnow';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+let publishedCount = 0;
+let recentLogs: any[] = [];
+
+if (runtimeEnv?.DB) {
+  const countRes = await runtimeEnv.DB
+    .prepare("SELECT COUNT(*) as c FROM articles WHERE status = 'published'")
+    .first<{ c: number }>();
+  publishedCount = countRes?.c || 0;
+
+  const logsRes = await runtimeEnv.DB
+    .prepare("SELECT * FROM audit_logs WHERE action = 'INDEXNOW_SUBMITTED' ORDER BY created_at DESC LIMIT 10")
+    .all();
+  recentLogs = logsRes.results || [];
+}
+---
+
+<AdminLayout title="IndexNow Protocol" currentPath="/admin/seo">
+  <div class="page-header">
+    <div class="header-left">
+      <a href="/admin/seo" class="back-link">&larr; Back to SEO Overview</a>
+      <h1 class="page-title">IndexNow Instant Discovery Protocol</h1>
+      <p class="page-description">
+        Directly notifies search engines (Bing, Yandex, Seznam, Naver, etc.) whenever content is published or updated on ECargyan.
+      </p>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Status & Key Card -->
+  <div class="indexnow-grid">
+    <div class="card config-card">
+      <h2 class="card-title">Protocol Configuration</h2>
+
+      <div class="meta-row">
+        <span class="meta-label">Protocol Status:</span>
+        <span class="badge badge-success">Active &bull; Automatic</span>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">API Endpoint:</span>
+        <code class="code-val">https://api.indexnow.org/indexnow</code>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">Configured Host:</span>
+        <code class="code-val">{DEFAULT_HOST}</code>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">IndexNow Key:</span>
+        <code class="code-val">{DEFAULT_INDEXNOW_KEY}</code>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">Key Verification File:</span>
+        <a href={`/${DEFAULT_INDEXNOW_KEY}.txt`} target="_blank" class="link-verify">
+          /{DEFAULT_INDEXNOW_KEY}.txt &nearr;
+        </a>
+      </div>
+
+      <div class="meta-row">
+        <span class="meta-label">HTML Meta Tag:</span>
+        <span class="badge badge-neutral">&lt;meta name="indexnow-key" ... /&gt;</span>
+      </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="card action-card">
+      <h2 class="card-title">Trigger Submissions</h2>
+
+      <div class="action-block">
+        <h3 class="action-heading">Bulk Submit Published Articles</h3>
+        <p class="action-desc">
+          Dispatches all <strong>{publishedCount}</strong> currently published articles plus homepage and taxonomy routes to IndexNow.
+        </p>
+        <form action="/admin/seo/indexnow/submit" method="POST">
+          <input type="hidden" name="action" value="submit_all" />
+          <button type="submit" class="btn btn-primary btn-block">
+            &#9889; Submit All Published Content ({publishedCount} articles)
+          </button>
+        </form>
+      </div>
+
+      <div class="action-divider"></div>
+
+      <div class="action-block">
+        <h3 class="action-heading">Submit Custom URL</h3>
+        <p class="action-desc">
+          Ping a specific article or page URL directly to the indexing engines.
+        </p>
+        <form action="/admin/seo/indexnow/submit" method="POST" class="custom-url-form">
+          <input
+            type="text"
+            name="customUrl"
+            placeholder="https://ecargyan.com/article/your-slug"
+            class="form-input"
+            required
+          />
+          <button type="submit" class="btn btn-secondary">
+            Submit Single URL
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Submissions Log -->
+  <div class="card logs-card">
+    <h2 class="card-title">Recent IndexNow Dispatches</h2>
+
+    {recentLogs.length === 0 ? (
+      <div class="empty-state">
+        <p>No IndexNow dispatches recorded in audit logs yet.</p>
+        <span class="empty-subtext">Publish an article or click "Submit All" above to trigger your first IndexNow ping.</span>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>URLs Count</th>
+              <th>Status</th>
+              <th>Engine Response</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentLogs.map((log) => {
+              let parsed: any = {};
+              try { parsed = JSON.parse(log.details || '{}'); } catch (e) {}
+              const isOk = parsed.success;
+              return (
+                <tr>
+                  <td>{new Date(log.created_at).toLocaleString()}</td>
+                  <td><strong>{parsed.urls?.length || 1} URL(s)</strong></td>
+                  <td>
+                    <span class:list={['badge', isOk ? 'badge-success' : 'badge-danger']}>
+                      {parsed.statusCode ? `HTTP ${parsed.statusCode}` : (isOk ? 'OK' : 'Error')}
+                    </span>
+                  </td>
+                  <td class="cell-message">{parsed.message || 'Dispatched'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    max-width: 780px;
+  }
+
+  .indexnow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--color-border-subtle, rgba(0,0,0,0.05));
+    font-size: 0.875rem;
+  }
+
+  .meta-label {
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .code-val {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    background-color: var(--color-surface-subtle);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+  }
+
+  .link-verify {
+    color: var(--color-brand-accent);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    text-decoration: underline;
+  }
+
+  .action-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .action-heading {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .action-desc {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.5rem 0;
+    line-height: 1.4;
+  }
+
+  .action-divider {
+    height: 1px;
+    background-color: var(--color-border);
+    margin: 1.25rem 0;
+  }
+
+  .custom-url-form {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .custom-url-form .form-input {
+    flex: 1;
+  }
+
+  .logs-card {
+    margin-top: 1.5rem;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+  }
+
+  .badge-success {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+
+  .badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .badge-neutral {
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    text-transform: none;
+    font-family: var(--font-mono);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  .empty-subtext {
+    display: block;
+    font-size: 0.8125rem;
+    margin-top: 0.25rem;
+  }
+
+  .cell-message {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 860px) {
+    .indexnow-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

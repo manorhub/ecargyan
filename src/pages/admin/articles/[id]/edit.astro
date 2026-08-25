@@ -96,6 +96,17 @@ if (Astro.request.method === 'POST') {
         await dbService.logAudit(Astro.locals.admin.id, 'update_article', 'article', id, { title, slug, status });
       }
 
+      // Automatic IndexNow ping on publish
+      if (status === 'published' && runtimeEnv?.DB) {
+        try {
+          const { IndexNowService } = await import('../../../../lib/seo/indexnow');
+          const indexNow = new IndexNowService();
+          await indexNow.submitArticle(slug, { db: runtimeEnv.DB, adminId: Astro.locals.admin?.id });
+        } catch (e) {
+          // Log error but don't fail article save
+        }
+      }
+
       return Astro.redirect('/admin/articles', 302);
     }
   } catch (err) {
