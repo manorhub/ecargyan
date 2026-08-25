@@ -19,7 +19,8 @@ export class RunwareProvider implements ImageGenerationProvider {
   }
 
   async generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResult> {
-    const taskUUID = request.jobId || crypto.randomUUID();
+    const isUuidV4 = request.jobId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.jobId);
+    const taskUUID = isUuidV4 ? request.jobId : crypto.randomUUID();
     const model = request.model || DEFAULT_MODEL;
 
     const payload = [

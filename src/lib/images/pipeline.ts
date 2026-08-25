@@ -51,7 +51,7 @@ export class ImagePipelineService {
     options: ImagePipelineOptions = {}
   ): Promise<GenerationPipelineResult> {
     const startTime = Date.now();
-    const jobId = `img_job_${crypto.randomUUID().slice(0, 16)}`;
+    const jobId = crypto.randomUUID();
 
     logInfo(`Starting automated image generation job ${jobId} for article ${articleId}`);
 
