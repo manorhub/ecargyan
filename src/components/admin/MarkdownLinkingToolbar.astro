@@ -221,10 +221,17 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
 
     let selectedArticle = null;
 
+    // Prevent mousedown on toolbar buttons from stealing focus/selection from textarea
+    wrapper.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.toolbar-btn')) {
+        e.preventDefault();
+      }
+    });
+
     // Helper to get selected text in textarea
     function getSelection() {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
       const selectedText = textarea.value.substring(start, end);
       return { start, end, selectedText };
     }
@@ -233,10 +240,14 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
     function insertTextAtCursor(textToInsert, selectInserted = false) {
       const { start, end } = getSelection();
       const val = textarea.value;
+      const scrollPos = textarea.scrollTop;
+      
       textarea.value = val.substring(0, start) + textToInsert + val.substring(end);
       
       const newCursorPos = start + textToInsert.length;
       textarea.focus();
+      textarea.scrollTop = scrollPos;
+      
       if (selectInserted) {
         textarea.setSelectionRange(start, newCursorPos);
       } else {
@@ -249,21 +260,34 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
 
     // Helper to wrap selected text
     function wrapSelection(before, after, defaultText = 'text') {
-      const { start, selectedText } = getSelection();
+      const { start, end, selectedText } = getSelection();
       const content = selectedText || defaultText;
       const replacement = before + content + after;
-      insertTextAtCursor(replacement);
-      
-      if (!selectedText) {
+      const scrollPos = textarea.scrollTop;
+      const val = textarea.value;
+
+      textarea.value = val.substring(0, start) + replacement + val.substring(end);
+      textarea.focus();
+      textarea.scrollTop = scrollPos;
+
+      if (selectedText) {
+        // Keep selected text highlighted within markers
+        textarea.setSelectionRange(start + before.length, start + before.length + selectedText.length);
+      } else {
         // Highlight placeholder text
-        textarea.setSelectionRange(start + before.length, start + before.length + content.length);
+        textarea.setSelectionRange(start + before.length, start + before.length + defaultText.length);
       }
+
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // Toolbar Action Buttons Handler
     wrapper.addEventListener('click', (e) => {
       const btn = e.target.closest('.toolbar-btn');
       if (!btn) return;
+
+      e.preventDefault();
+      e.stopPropagation();
 
       const action = btn.dataset.action;
       if (!action) return;
@@ -315,7 +339,9 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
 
     // Close modal handlers
     document.querySelectorAll('[data-close-modal]').forEach((el) => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         interlinkModal.style.display = 'none';
         outerlinkModal.style.display = 'none';
         suggestionsModal.style.display = 'none';
@@ -394,7 +420,9 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
       });
     }
 
-    btnInsertInterlink.addEventListener('click', () => {
+    btnInsertInterlink.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (!selectedArticle) return;
       const anchor = interlinkAnchorInput.value.trim() || selectedArticle.title;
       const markdownLink = `[${anchor}](/article/${selectedArticle.slug})`;
@@ -414,7 +442,9 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
       outerlinkUrlInput.focus();
     }
 
-    btnInsertOuterlink.addEventListener('click', () => {
+    btnInsertOuterlink.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const rawUrl = outerlinkUrlInput.value.trim();
       const anchor = outerlinkAnchorInput.value.trim() || rawUrl;
 
@@ -478,7 +508,9 @@ const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
         `).join('');
 
         suggestionsResultsList.querySelectorAll('.btn-quick-insert').forEach((btn) => {
-          btn.addEventListener('click', () => {
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const slug = btn.dataset.slug;
             const title = decodeURIComponent(btn.dataset.title);
             const { selectedText } = getSelection();
