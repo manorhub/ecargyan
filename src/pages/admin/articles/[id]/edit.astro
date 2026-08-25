@@ -319,6 +319,9 @@ function toDatetimeInput(ts: number | null): string {
             <a href="/admin/articles" class="btn btn-secondary btn-block">
               Cancel
             </a>
+            <button type="submit" form="delete-article-standalone-form" class="btn btn-danger-link btn-block" style="color: #dc2626; font-size: 0.8125rem; margin-top: 0.5rem; text-align: center; border: 1px solid #fecaca; background: #fff5f5; border-radius: var(--radius-sm); padding: 0.4rem;">
+              🗑 Delete Article Permanently
+            </button>
           </div>
         </div>
 
@@ -586,6 +589,10 @@ function toDatetimeInput(ts: number | null): string {
   </form>
 
   <!-- Auxiliary Standalone Forms (Rendered outside main editor form to prevent HTML5 nested form breakage) -->
+  <form id="delete-article-standalone-form" action="/admin/articles/delete" method="POST" style="display:none;" onsubmit={`return confirm('Permanently delete this article: “${article.title.replace(/'/g, "\\'")}”?');`}>
+    <input type="hidden" name="id" value={article.id} />
+    <input type="hidden" name="return_to" value="/admin/articles" />
+  </form>
   <form id="regen-img-form" action={`/admin/articles/${article.id}/images/generate`} method="POST" style="display:none;">
     <input type="hidden" name="forceRegenerate" value="true" />
   </form>

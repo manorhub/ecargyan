@@ -881,13 +881,21 @@ export class DatabaseService {
   }
 
   async deleteArticle(id: string): Promise<boolean> {
+    if (!id || typeof id !== 'string' || id.trim().length === 0) {
+      logError('deleteArticle called with empty or invalid ID', { id });
+      return false;
+    }
+    const cleanId = id.trim();
     try {
-      await this.db.prepare('DELETE FROM article_tags WHERE article_id = ?').bind(id).run();
-      await this.db.prepare('DELETE FROM seo_metadata WHERE article_id = ?').bind(id).run();
-      await this.db.prepare('DELETE FROM articles WHERE id = ?').bind(id).run();
+      await this.db.prepare('DELETE FROM article_images WHERE article_id = ?').bind(cleanId).run();
+      await this.db.prepare('DELETE FROM article_links WHERE source_article_id = ? OR target_article_id = ?').bind(cleanId, cleanId).run();
+      await this.db.prepare('DELETE FROM article_revisions WHERE article_id = ?').bind(cleanId).run();
+      await this.db.prepare('DELETE FROM article_tags WHERE article_id = ?').bind(cleanId).run();
+      await this.db.prepare('DELETE FROM seo_metadata WHERE article_id = ?').bind(cleanId).run();
+      await this.db.prepare('DELETE FROM articles WHERE id = ?').bind(cleanId).run();
       return true;
     } catch (error) {
-      logError(`Failed to delete article ${id}`, error);
+      logError(`Failed to delete article ${cleanId}`, error);
       return false;
     }
   }

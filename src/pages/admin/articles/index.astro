@@ -188,8 +188,9 @@ const errorMsg = url.searchParams.get('error') || '';
                     <a href={`/admin/articles/${art.id}/edit`} class="btn btn-secondary btn-xs">
                       Edit
                     </a>
-                    <form action="/admin/articles/delete" method="POST" onsubmit="return confirm('Permanently delete this article?');">
+                    <form action="/admin/articles/delete" method="POST" onsubmit={`return confirm('Permanently delete article: “${art.title.replace(/'/g, "\\'")}”?');`}>
                       <input type="hidden" name="id" value={art.id} />
+                      <input type="hidden" name="return_to" value={`/admin/articles?page=${page}&status=${statusFilter}&category=${categoryFilter}&author=${authorFilter}&q=${search}`} />
                       <button type="submit" class="btn btn-danger btn-xs">Delete</button>
                     </form>
                   </div>
