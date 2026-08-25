@@ -1,0 +1,420 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { InboundLinkEngine } from '../../../lib/seo/inbound';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+let orphanReports: any[] = [];
+let totalPublished = 0;
+let totalLinked = 0;
+
+if (runtimeEnv?.DB) {
+  const inboundEngine = new InboundLinkEngine(runtimeEnv.DB);
+  orphanReports = await inboundEngine.getAllOrphanArticlesWithSuggestions();
+
+  const totalRes = await runtimeEnv.DB
+    .prepare("SELECT COUNT(*) as c FROM articles WHERE status = 'published'")
+    .first<{ c: number }>();
+  totalPublished = totalRes?.c || 0;
+  totalLinked = Math.max(0, totalPublished - orphanReports.length);
+}
+---
+
+<AdminLayout title="Orphan Prevention & Inbound Links" currentPath="/admin/seo">
+  <div class="page-header">
+    <div class="header-left">
+      <a href="/admin/seo" class="back-link">&larr; Back to SEO Overview</a>
+      <h1 class="page-title">Orphan Prevention &amp; Inbound Link Matrix</h1>
+      <p class="page-description">
+        Ensures every published article has inbound internal links from other relevant articles so search engines and readers can easily discover it.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/seo" class="btn btn-secondary">SEO Dashboard</a>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Total Published Articles</span>
+      <span class="stat-value">{totalPublished}</span>
+    </div>
+
+    <div class="stat-card" class:list={[{ 'stat-warning': orphanReports.length > 0, 'stat-success': orphanReports.length === 0 }]}>
+      <span class="stat-label">Orphan Articles (0 Inbound Links)</span>
+      <span class="stat-value">{orphanReports.length}</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Connected Articles (&ge;1 Inbound Link)</span>
+      <span class="stat-value text-success">{totalLinked}</span>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Link Graph Health</span>
+      <span class="stat-value text-success">
+        {totalPublished > 0 ? `${Math.round((totalLinked / totalPublished) * 100)}%` : '100%'}
+      </span>
+    </div>
+  </div>
+
+  <!-- Orphan Resolution Workspace -->
+  <div class="card workspace-card">
+    <div class="card-header-flex">
+      <div>
+        <h2 class="card-title">Orphan Articles Needing Inbound Links ({orphanReports.length})</h2>
+        <p class="card-subtitle">
+          These articles have zero internal links pointing to them. Use the recommendations below to add natural contextual links from related articles.
+        </p>
+      </div>
+    </div>
+
+    {orphanReports.length === 0 ? (
+      <div class="empty-state-success">
+        <span class="success-icon">&#9989;</span>
+        <h3>Zero Orphan Articles!</h3>
+        <p>Every published article on ECargyan is properly connected in the internal link topology.</p>
+      </div>
+    ) : (
+      <div class="orphans-list">
+        {orphanReports.map((orphan) => (
+          <div class="orphan-card">
+            <div class="orphan-header">
+              <div class="orphan-title-wrap">
+                <span class="badge badge-danger">ORPHAN</span>
+                <h3 class="orphan-title">
+                  <a href={`/admin/articles/${orphan.articleId}/edit`} target="_blank">
+                    {orphan.title} &nearr;
+                  </a>
+                </h3>
+              </div>
+              <div class="orphan-meta">
+                <span class="meta-tag">/article/{orphan.slug}</span>
+                {orphan.categoryName && <span class="meta-tag">{orphan.categoryName}</span>}
+              </div>
+            </div>
+
+            <div class="orphan-body">
+              <h4 class="opps-section-title">
+                &#128161; Recommended Source Articles to Link TO This Article:
+              </h4>
+
+              {orphan.opportunities.length === 0 ? (
+                <p class="field-hint">No high-confidence source articles found yet. Consider writing a related article or adding manual links.</p>
+              ) : (
+                <div class="opps-grid">
+                  {orphan.opportunities.map((opp: any) => (
+                    <div class="opp-item">
+                      <div class="opp-item-header">
+                        <span class="opp-source-name">{opp.sourceArticleTitle}</span>
+                        <span class="score-badge">{opp.relevanceScore}% Match</span>
+                      </div>
+                      <div class="opp-match-keyword">
+                        Matched Topic: <strong>{opp.matchedKeyword}</strong>
+                      </div>
+                      <blockquote class="opp-sentence-quote">
+                        &ldquo;...{opp.contextSentence}...&rdquo;
+                      </blockquote>
+                      <div class="opp-item-actions">
+                        <form action="/admin/seo/inbound/apply" method="POST">
+                          <input type="hidden" name="sourceArticleId" value={opp.sourceArticleId} />
+                          <input type="hidden" name="targetArticleId" value={orphan.articleId} />
+                          <input type="hidden" name="originalSentence" value={opp.contextSentence} />
+                          <input type="hidden" name="replacementSentence" value={opp.suggestedReplacement} />
+                          <button type="submit" class="btn btn-primary btn-sm">
+                            &#9889; Auto-Inject Link into Source Article
+                          </button>
+                        </form>
+                        <a href={`/admin/articles/${opp.sourceArticleId}/edit`} target="_blank" class="btn btn-secondary btn-sm">
+                          Edit Source &nearr;
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .back-link {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+    max-width: 780px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-text-main);
+  }
+
+  .stat-warning .stat-value { color: var(--color-danger, #dc2626); }
+  .stat-success .stat-value { color: var(--color-success, #16a34a); }
+  .text-success { color: var(--color-success, #16a34a); }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+  }
+
+  .card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+  }
+
+  .card-subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .orphans-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .orphan-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface-subtle);
+    padding: 1.25rem;
+  }
+
+  .orphan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .orphan-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .orphan-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .orphan-title a {
+    color: var(--color-text-main);
+    text-decoration: underline;
+  }
+
+  .orphan-meta {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .meta-tag {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+    background-color: var(--color-surface);
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+  }
+
+  .opps-section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .opps-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .opp-item {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .opp-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .opp-source-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .score-badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: #15803d;
+    background-color: #dcfce7;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .opp-match-keyword {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .opp-sentence-quote {
+    font-size: 0.8125rem;
+    font-style: italic;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--color-brand-accent);
+    border-radius: var(--radius-sm);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .opp-item-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .empty-state-success {
+    text-align: center;
+    padding: 3rem 1rem;
+  }
+
+  .success-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 0.75rem;
+  }
+
+  .badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+  }
+
+  .badge-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  .badge-success {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+
+  .alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .alert-success {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+
+  .alert-danger {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+  }
+
+  @media (max-width: 960px) {
+    .stats-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>
