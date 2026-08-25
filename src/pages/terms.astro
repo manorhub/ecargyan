@@ -1,47 +1,266 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+import { getDb } from '../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let contactEmail = 'editorial@ecargyan.com';
+let effectiveDate = 'August 25, 2026';
+let lastUpdatedDate = 'August 25, 2026';
+
+if (dbService) {
+  const [dbEmail, dbEffDate, dbUpdDate] = await Promise.all([
+    dbService.getSetting('contact_email'),
+    dbService.getSetting('terms_effective_date'),
+    dbService.getSetting('terms_last_updated'),
+  ]);
+  if (dbEmail) contactEmail = dbEmail;
+  if (dbEffDate) effectiveDate = dbEffDate;
+  if (dbUpdDate) lastUpdatedDate = dbUpdDate;
+}
 
 const canonicalUrl = getCanonicalUrl('/terms');
 ---
 
 <BaseLayout
   seo={{
-    title: 'Terms of Publication & Service',
-    description: 'Terms and conditions governing the use of ECargyan editorial content.',
+    title: `Terms of Service | ${SITE_CONFIG.name}`,
+    description: `Terms and conditions governing access to and use of ${SITE_CONFIG.name} editorial publications.`,
     canonicalUrl,
   }}
   currentPath="/terms"
 >
   <header class="static-header">
     <div class="container-narrow">
-      <span class="static-kicker">Governance</span>
+      <span class="static-kicker">Governance & Publishing Terms</span>
       <h1 class="static-title">Terms of Service</h1>
-      <p class="static-subhead">Effective Date: January 1, 2026</p>
+      <p class="static-subhead">
+        Effective Date: {effectiveDate} &bull; Last Updated: {lastUpdatedDate}
+      </p>
     </div>
   </header>
 
-  <main class="container-narrow static-content prose">
-    <h2>1. Acceptance of Terms</h2>
-    <p>
-      By accessing or reading content on {SITE_CONFIG.name}, you agree to abide by these terms of publication.
-    </p>
+  <main class="container-narrow static-content">
+    <article class="prose-content">
+      <section class="terms-section">
+        <h2>1. Acceptance of Terms</h2>
+        <p>
+          These Terms of Service (&ldquo;Terms&rdquo;) constitute a binding agreement between you and <strong>{SITE_CONFIG.name}</strong> (&ldquo;{SITE_CONFIG.name}&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), governing your access to and use of <a href={SITE_CONFIG.url}>{SITE_CONFIG.url.replace('https://', '')}</a>, including all published articles, technical benchmarks, dispatches, and associated services.
+        </p>
+        <p>
+          By accessing, browsing, or reading content on {SITE_CONFIG.name}, you acknowledge that you have read, understood, and agree to be bound by these Terms and our <a href="/privacy">Privacy Policy</a>. If you do not agree with any part of these Terms, you must discontinue use of the website immediately.
+        </p>
+      </section>
 
-    <h2>2. Intellectual Property & Syndication</h2>
-    <p>
-      All original editorial reports, analyses, graphics, and benchmark data published on {SITE_CONFIG.name} are the intellectual property of the publication. Quotation and brief excerpting for journalistic or academic commentary is permitted provided proper attribution and a direct link to the canonical dispatch URL are included.
-    </p>
+      <section class="terms-section">
+        <h2>2. About ECargyan & Website Purpose</h2>
+        <p>
+          {SITE_CONFIG.name} is an independent digital publication providing technical journalism, engineering analysis, powertrain benchmarks, and industry intelligence on electric mobility, battery technologies, autonomous vehicle architectures, and automotive software ecosystems.
+        </p>
+        <p>
+          All materials published on this website are provided solely for general informational and educational purposes. {SITE_CONFIG.name} is an editorial media platform; we do not sell vehicles, automotive components, financial instruments, or commercial repair services.
+        </p>
+      </section>
 
-    <h2>3. Editorial Disclaimer</h2>
-    <p>
-      Technical analyses, market forecasts, and specifications are provided for informational and editorial purposes. While we strive for absolute factual accuracy, vehicle specifications may vary by market and manufacturer revision.
-    </p>
+      <section class="terms-section">
+        <h2>3. Use of the Website</h2>
+        <p>
+          You may access and view the public areas of {SITE_CONFIG.name} for personal, non-commercial, informational purposes. We do not require reader account creation to access published articles. Access to administrative areas of the website is strictly restricted to authorized editorial personnel.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>4. AI-Assisted Editorial Workflow</h2>
+        <p>
+          To deliver rigorous technical coverage across rapidly evolving automotive technologies, {SITE_CONFIG.name} utilizes an AI-assisted editorial production pipeline.
+        </p>
+        <ul>
+          <li>
+            <strong>Research Ingestion:</strong> Technical facts, manufacturer press releases, patent filings, and engineering announcements are ingested from authorized wire sources into our research database.
+          </li>
+          <li>
+            <strong>Synthesis & Drafting:</strong> Server-side artificial intelligence models (DeepSeek API) assist our editorial staff in structuring, summarizing, and synthesizing complex engineering topics into original drafts.
+          </li>
+          <li>
+            <strong>Automated Quality Checks & Editorial Review:</strong> Drafts are evaluated against automated quality, SEO, and fact-consistency thresholds, followed by human editorial review before final publication.
+          </li>
+        </ul>
+      </section>
+
+      <section class="terms-section">
+        <h2>5. Technical & General Information Disclaimer (No Professional Advice)</h2>
+        <div class="disclaimer-callout">
+          <strong>Important Engineering & Financial Notice:</strong>
+          <p>
+            The content published on {SITE_CONFIG.name}—including powertrain specifications, battery chemistry analyses, vehicle range benchmarks, financial industry forecasts, and software architecture reviews—is for informational purposes only. It does not constitute professional engineering advice, certified automotive repair instructions, legal counsel, or financial/investment recommendations.
+          </p>
+        </div>
+        <p>
+          While we strive for technical accuracy and thorough research, vehicle specifications, pricing, safety standards, and manufacturer software revisions vary by regional market and change over time. Readers must independently verify technical data with primary vehicle manufacturers or certified automotive professionals before making purchasing, engineering, or investment decisions.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>6. Source Research & Third-Party Content</h2>
+        <p>
+          Our editorial reporting references primary technical sources, official automaker announcements, patent records, and industry wire feeds.
+        </p>
+        <ul>
+          <li>
+            <strong>Third-Party Ownership:</strong> All trademarks, product names, logos, vehicle brand designations, and third-party media referenced on {SITE_CONFIG.name} remain the property of their respective owners. Reference to any trademarked name or entity does not imply affiliation, sponsorship, or endorsement.
+          </li>
+          <li>
+            <strong>Attribution:</strong> Where applicable or required by source usage terms, our reports include citations, source names, or direct outbound links to primary documentation.
+          </li>
+        </ul>
+      </section>
+
+      <section class="terms-section">
+        <h2>7. Intellectual Property & Content License</h2>
+        <p>
+          All original editorial text, technical analyses, benchmark presentations, infographics, layout designs, and software code on {SITE_CONFIG.name} are the intellectual property of {SITE_CONFIG.name} and protected by applicable copyright and intellectual property laws.
+        </p>
+        <h3>A. Permitted Use</h3>
+        <p>
+          You are granted a limited, revocable, non-exclusive, non-transferable license to access, view, and read our content on your personal devices and share canonical links to our articles.
+        </p>
+
+        <h3>B. Prohibited Reproduction</h3>
+        <p>
+          Except as explicitly authorized in Section 8 (Quotation & Excerpts), you may not copy, republish, distribute, broadcast, mirror, sell, license, or commercially exploit any full article or substantial portion of {SITE_CONFIG.name} without prior written consent from our editorial desk.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>8. Permitted Quotation & Fair Excerpts</h2>
+        <p>
+          Journalists, academic researchers, and industry commentators may quote brief excerpts from {SITE_CONFIG.name} articles under the following conditions:
+        </p>
+        <ul>
+          <li>The quoted text must be limited to a reasonable excerpt necessary for commentary, criticism, or reference (reproducing full articles is strictly prohibited).</li>
+          <li>Clear and prominent attribution must be given to <strong>{SITE_CONFIG.name}</strong>.</li>
+          <li>Online publications must include a direct, clickable hyperlink to the original canonical article URL on {SITE_CONFIG.name}.</li>
+        </ul>
+      </section>
+
+      <section class="terms-section">
+        <h2>9. Prohibited Activities & Automated Extraction</h2>
+        <p>
+          When accessing or using {SITE_CONFIG.name}, you agree not to:
+        </p>
+        <ul>
+          <li>Deploy automated scrapers, web crawlers, bots, or extraction scripts to harvest full articles, text content, or database assets for unauthorized reproduction, syndication, or AI model training without express written authorization (standard search engine indexing conforming to our <code>robots.txt</code> is permitted).</li>
+          <li>Attempt to probe, scan, or breach the security of our Cloudflare Workers edge runtime, D1 database, R2 media storage, or administrative authentication endpoints.</li>
+          <li>Transmit viruses, malware, worm scripts, or any code intended to disable or overload our edge infrastructure (including DDoS attacks).</li>
+          <li>Impersonate {SITE_CONFIG.name}, our editorial staff, or other individuals in communications with our dispatch desk.</li>
+          <li>Use our content in any manner that violates applicable local, national, or international laws or regulations.</li>
+        </ul>
+      </section>
+
+      <section class="terms-section">
+        <h2>10. External Links</h2>
+        <p>
+          Our dispatches may contain hyperlinks to external third-party websites, manufacturer portals, and technical documentation. These external sites are independently operated and maintained.
+        </p>
+        <p>
+          {SITE_CONFIG.name} has no control over the content, policies, or practices of external websites and assumes no responsibility for any loss or damage that may arise from your use of them. When following external links, you are subject to the terms and privacy policies of those destination websites.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>11. User Communications & Inquiries</h2>
+        <p>
+          If you submit news tips, technical corrections, research papers, or inquiries to our editorial desk via email:
+        </p>
+        <ul>
+          <li>You warrant that you have the right to provide the information and that your submission does not infringe upon any third party&rsquo;s intellectual property or confidentiality agreements.</li>
+          <li>You grant {SITE_CONFIG.name} a non-exclusive right to review, evaluate, and use factual intelligence provided in your correspondence for journalistic reporting.</li>
+          <li>We reserve the right to verify submissions independently before making factual corrections or publishing reporting derived from submitted tips.</li>
+        </ul>
+      </section>
+
+      <section class="terms-section">
+        <h2>12. Service Availability & Content Modifications</h2>
+        <p>
+          While we strive to maintain uninterrupted 24/7 availability across Cloudflare&rsquo;s global edge network, {SITE_CONFIG.name} does not guarantee that the website will operate without temporary interruptions, latency delays, or maintenance windows.
+        </p>
+        <p>
+          We reserve the right to update, modify, revise, correct, or withdraw any published article, topic cluster, or site feature at any time without prior notice in accordance with our editorial standards.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>13. Disclaimer of Warranties</h2>
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, {SITE_CONFIG.name} AND ALL PUBLISHED CONTENT ARE PROVIDED ON AN &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+        </p>
+        <p>
+          WE EXPRESSLY DISCLAIM ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, AND ACCURACY. WE DO NOT WARRANT THAT THE CONTENT IS COMPLETE, ERROR-FREE, UP-TO-DATE, OR FREE OF HARMFUL COMPONENTS.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>14. Limitation of Liability</h2>
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL {SITE_CONFIG.name}, ITS EDITORS, AUTHORS, CONTRIBUTORS, OR INFRASTRUCTURE PROVIDERS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, PUNITIVE, OR EXEMPLARY DAMAGES (INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOSS OF PROFITS, DATA LOSS, VEHICLE DAMAGE, MECHANICAL FAILURE, OR FINANCIAL LOSSES) ARISING OUT OF OR IN CONNECTION WITH YOUR USE OF, OR INABILITY TO USE, THIS WEBSITE OR ANY INFORMATION PUBLISHED HEREIN.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>15. Indemnification</h2>
+        <p>
+          You agree to defend, indemnify, and hold harmless {SITE_CONFIG.name}, its operators, and contributors from and against any claims, liabilities, damages, losses, and expenses (including reasonable legal fees) arising out of or in any way connected with your violation of these Terms, your misuse of the website, or your infringement of any third-party rights.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>16. Termination & Access Restriction</h2>
+        <p>
+          We reserve the right, in our sole discretion and without prior notice, to block, throttle, or terminate access to {SITE_CONFIG.name} for any user, IP address, or automated network bot that violates these Terms, attempts unauthorized scraping, or engages in security attacks against our infrastructure.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>17. Governing Law & Dispute Resolution</h2>
+        <p>
+          These Terms shall be governed by and construed in accordance with applicable laws governing digital publishing and electronic communications, without giving effect to any principles of conflicts of law.
+        </p>
+        <p>
+          In the event of any controversy or claim arising out of or relating to these Terms or your use of {SITE_CONFIG.name}, the parties agree to first seek informal resolution in good faith by contacting our editorial desk before pursuing formal legal proceedings.
+        </p>
+      </section>
+
+      <section class="terms-section">
+        <h2>18. Changes to These Terms</h2>
+        <p>
+          We may revise these Terms of Service periodically to reflect changes in our platform features, editorial policies, or statutory requirements. Any revisions will become effective immediately upon posting to this page, with the updated date displayed at the top of the document.
+        </p>
+        <p>
+          Your continued use of {SITE_CONFIG.name} following the posting of revised Terms constitutes your acceptance of the updated terms.
+        </p>
+      </section>
+
+      <section class="terms-section contact-card-section">
+        <h2>19. Editorial Desk & Inquiries</h2>
+        <p>
+          If you have questions regarding these Terms, permitted content syndication, or editorial corrections, please contact:
+        </p>
+        <div class="contact-box">
+          <p><strong>Publication:</strong> {SITE_CONFIG.name}</p>
+          <p><strong>Editorial Desk:</strong> <a href={`mailto:${contactEmail}`}>{contactEmail}</a></p>
+          <p><strong>Website:</strong> <a href={SITE_CONFIG.url}>{SITE_CONFIG.url}</a></p>
+          <p><strong>Dispatch Desk:</strong> <a href="/contact">/contact</a></p>
+        </div>
+      </section>
+    </article>
   </main>
 </BaseLayout>
 
 <style>
   .static-header {
-    padding: 4.5rem 0 3rem;
+    padding: 4rem 0 2.5rem;
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
   }
@@ -57,18 +276,135 @@ const canonicalUrl = getCanonicalUrl('/terms');
   }
 
   .static-title {
-    font-size: 3rem;
+    font-size: 2.75rem;
     letter-spacing: -0.025em;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     font-weight: 700;
+    line-height: 1.15;
   }
 
   .static-subhead {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     color: var(--color-text-muted);
+    margin: 0;
   }
 
   .static-content {
-    padding: 3.5rem 1.5rem 6rem;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  .prose-content {
+    max-width: 720px;
+    margin: 0 auto;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+  }
+
+  .terms-section {
+    margin-bottom: 2.75rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .terms-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .terms-section h2 {
+    font-size: 1.375rem;
+    font-weight: 700;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--color-text-main);
+    letter-spacing: -0.015em;
+  }
+
+  .terms-section h3 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text-main);
+  }
+
+  .terms-section p {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--color-text-main);
+  }
+
+  .terms-section ul {
+    margin: 0 0 1.25rem 1.25rem;
+    padding: 0;
+  }
+
+  .terms-section li {
+    margin-bottom: 0.5rem;
+  }
+
+  .terms-section a {
+    color: var(--color-brand-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .terms-section a:hover {
+    color: var(--color-text-main);
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .disclaimer-callout {
+    background-color: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+  }
+
+  .disclaimer-callout strong {
+    display: block;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    color: #92400e;
+  }
+
+  .disclaimer-callout p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #78350f;
+    line-height: 1.5;
+  }
+
+  .contact-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .contact-box p {
+    margin-bottom: 0.35rem;
+    font-size: 0.9375rem;
+  }
+
+  .contact-box p:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 640px) {
+    .static-title { font-size: 2.125rem; }
+    .static-content { padding: 2rem 1rem 4rem; }
   }
 </style>
