@@ -1,8 +1,10 @@
 ---
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import MarkdownLinkingToolbar from '../../../../components/admin/MarkdownLinkingToolbar.astro';
 import { getDb } from '../../../../lib/db/client';
 import { getUniqueSlug } from '../../../../lib/db/slug';
 import { validateArticleInput } from '../../../../lib/utils/validation';
+import { InternalLinkingEngine } from '../../../../lib/seo/linking';
 import type { ArticleStatus } from '../../../../lib/db/schema';
 
 const { id } = Astro.params;
@@ -17,12 +19,20 @@ if (!article) return Astro.redirect('/admin/articles', 302);
 
 let errorMessage = '';
 
-const [categories, authors, tags, mediaList, articleImages] = await Promise.all([
+const linkingEngine = runtimeEnv?.DB ? new InternalLinkingEngine(runtimeEnv.DB) : null;
+
+const [categories, authors, tags, mediaList, articleImages, recommendedLinks] = await Promise.all([
   dbService.listCategories(),
   dbService.listAuthors(),
   dbService.listTags(),
   dbService.listMedia(50, 0),
   dbService.getArticleImages(id),
+  linkingEngine ? linkingEngine.findLinkCandidates(id, {
+    categoryId: article.category_id,
+    titleKeywords: article.title.split(' '),
+    limit: 5,
+    minRelevance: 0,
+  }) : Promise.resolve([]),
 ]);
 
 const activeImage = articleImages.find((i) => i.is_featured === 1) || null;
@@ -180,9 +190,7 @@ function toDatetimeInput(ts: number | null): string {
 
           <div class="form-group">
             <label for="content" class="form-label">Article Body (Markdown) *</label>
-            <div class="markdown-hints">
-              <span>Supports Markdown: # Headings, **bold**, *italic*, &gt; quotes, `code`, - lists</span>
-            </div>
+            <MarkdownLinkingToolbar textareaId="content" currentArticleId={article.id} categoryId={article.category_id} />
             <textarea
               id="content"
               name="content"
@@ -428,6 +436,42 @@ function toDatetimeInput(ts: number | null): string {
                 <option value={m.id} selected={article.featured_image_id === m.id}>{m.filename}</option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <!-- Linking Intelligence & Recommendations -->
+        <div class="sidebar-card">
+          <div class="card-header-flex">
+            <h2 class="card-title">Interlinking Recommendations</h2>
+            <span class="provider-badge">SEO Engine</span>
+          </div>
+
+          <div class="linking-sidebar-block">
+            {recommendedLinks.length === 0 ? (
+              <p class="field-hint">No other published articles found to recommend yet.</p>
+            ) : (
+              <div class="recommendations-list">
+                {recommendedLinks.map((rec) => (
+                  <div class="recommendation-item">
+                    <div class="rec-info">
+                      <div class="rec-title">{rec.title}</div>
+                      <div class="rec-meta">
+                        <span class="score-badge">Score: {rec.relevanceScore}%</span>
+                        {rec.category && <span class="cat-badge">{rec.category}</span>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="btn btn-outline-xs btn-sidebar-insert"
+                      data-slug={rec.slug}
+                      data-title={rec.title}
+                    >
+                      + Insert
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -790,9 +834,97 @@ function toDatetimeInput(ts: number | null): string {
     font-size: 0.8125rem;
   }
 
+  .recommendations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .recommendation-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+  }
+
+  .rec-info {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .rec-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text-main);
+  }
+
+  .rec-meta {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    margin-top: 0.15rem;
+  }
+
+  .score-badge {
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: #15803d;
+    background-color: #dcfce7;
+    padding: 0.05rem 0.25rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .cat-badge {
+    font-size: 0.625rem;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface);
+    padding: 0.05rem 0.25rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-sidebar-insert {
+    flex-shrink: 0;
+    color: var(--color-brand-accent);
+    font-weight: 600;
+  }
+
   @media (max-width: 960px) {
     .editor-layout {
       grid-template-columns: 1fr;
     }
   }
 </style>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const textarea = document.getElementById('content');
+    if (!textarea) return;
+
+    document.querySelectorAll('.btn-sidebar-insert').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const slug = btn.dataset.slug;
+        const title = btn.dataset.title;
+        if (!slug || !title) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selected = textarea.value.substring(start, end);
+        const anchor = selected || title;
+        const markdown = `[${anchor}](/article/${slug})`;
+
+        textarea.value = textarea.value.substring(0, start) + markdown + textarea.value.substring(end);
+        const newPos = start + markdown.length;
+        textarea.focus();
+        textarea.setSelectionRange(newPos, newPos);
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+  });
+</script>

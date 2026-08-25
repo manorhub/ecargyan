@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownLinkingToolbar from '../../../components/admin/MarkdownLinkingToolbar.astro';
 import { getDb } from '../../../lib/db/client';
 import { getUniqueSlug } from '../../../lib/db/slug';
 import { validateArticleInput } from '../../../lib/utils/validation';
@@ -133,9 +134,7 @@ if (Astro.request.method === 'POST') {
 
           <div class="form-group">
             <label for="content" class="form-label">Article Body (Markdown) *</label>
-            <div class="markdown-hints">
-              <span>Supports Markdown: # Headings, **bold**, *italic*, &gt; quotes, `code`, - lists</span>
-            </div>
+            <MarkdownLinkingToolbar textareaId="content" />
             <textarea
               id="content"
               name="content"

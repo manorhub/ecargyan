@@ -1,0 +1,801 @@
+---
+/**
+ * Markdown Editor Linking & Formatting Toolbar
+ * Provides quick formatting, live search for internal article linking, external linking,
+ * and automated SEO link suggestions.
+ */
+
+interface Props {
+  textareaId: string;
+  currentArticleId?: string;
+  categoryId?: string | null;
+}
+
+const { textareaId, currentArticleId = '', categoryId = '' } = Astro.props;
+---
+
+<div class="editor-toolbar-wrapper" data-textarea-id={textareaId} data-article-id={currentArticleId} data-category-id={categoryId || ''}>
+  <!-- Primary Toolbar Row -->
+  <div class="editor-toolbar">
+    <!-- Format Group -->
+    <div class="toolbar-group">
+      <button type="button" class="toolbar-btn" data-action="bold" title="Bold (**text**)">
+        <strong>B</strong>
+      </button>
+      <button type="button" class="toolbar-btn" data-action="italic" title="Italic (*text*)">
+        <em>I</em>
+      </button>
+      <button type="button" class="toolbar-btn" data-action="h2" title="Heading 2 (## Heading)">
+        H2
+      </button>
+      <button type="button" class="toolbar-btn" data-action="h3" title="Heading 3 (### Heading)">
+        H3
+      </button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Lists & Blocks Group -->
+    <div class="toolbar-group">
+      <button type="button" class="toolbar-btn" data-action="quote" title="Quote (> Quote)">
+        &ldquo;&rdquo;
+      </button>
+      <button type="button" class="toolbar-btn" data-action="ul" title="Bullet List (- Item)">
+        &bull; List
+      </button>
+      <button type="button" class="toolbar-btn" data-action="ol" title="Numbered List (1. Item)">
+        1. List
+      </button>
+      <button type="button" class="toolbar-btn" data-action="code" title="Code block">
+        &lt;/&gt;
+      </button>
+      <button type="button" class="toolbar-btn" data-action="table" title="Insert Table">
+        &#9638; Table
+      </button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Advanced Linking Group -->
+    <div class="toolbar-group linking-group">
+      <button type="button" class="toolbar-btn btn-highlight" data-action="open-interlink" title="Search & Insert Internal Article Link">
+        <span class="btn-icon">&#128279;</span> Interlink
+      </button>
+      <button type="button" class="toolbar-btn btn-highlight-alt" data-action="open-outerlink" title="Insert External / Outer Web Link">
+        <span class="btn-icon">&#127760;</span> Outer Link
+      </button>
+      <button type="button" class="toolbar-btn" data-action="open-suggestions" title="Smart SEO Link Recommendations">
+        <span class="btn-icon">&#128161;</span> Suggestions
+      </button>
+    </div>
+  </div>
+
+  <!-- 1. Interlink Modal Dialog -->
+  <div class="toolbar-modal" id="interlink-modal" style="display: none;">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">&#128279; Insert Internal Article Link</h3>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group-modal">
+          <label class="modal-label">Search Published Articles:</label>
+          <input
+            type="text"
+            id="interlink-search-input"
+            class="form-input modal-input"
+            placeholder="Type keyword or headline..."
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-group-modal">
+          <label class="modal-label">Anchor Text (Visible Link Text):</label>
+          <input
+            type="text"
+            id="interlink-anchor-input"
+            class="form-input modal-input"
+            placeholder="Text to display for the link..."
+          />
+        </div>
+
+        <div class="search-results-container">
+          <div class="results-header">Matching Articles</div>
+          <div class="results-list" id="interlink-results-list">
+            <div class="loading-state">Loading articles...</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-insert-interlink" disabled>
+          Insert Link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. External / Outer Link Modal Dialog -->
+  <div class="toolbar-modal" id="outerlink-modal" style="display: none;">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">&#127760; Insert External / Outer Link</h3>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group-modal">
+          <label class="modal-label">Target URL (Destination):</label>
+          <input
+            type="url"
+            id="outerlink-url-input"
+            class="form-input modal-input"
+            placeholder="https://example.com/source-report"
+            required
+          />
+        </div>
+
+        <div class="form-group-modal">
+          <label class="modal-label">Anchor Text (Visible Link Text):</label>
+          <input
+            type="text"
+            id="outerlink-anchor-input"
+            class="form-input modal-input"
+            placeholder="e.g. Official Ministry Release"
+            required
+          />
+        </div>
+
+        <div class="form-group-modal">
+          <label class="checkbox-option">
+            <input type="checkbox" id="outerlink-newtab" checked />
+            <span>Open in new tab (<code>target="_blank" rel="noopener noreferrer"</code>)</span>
+          </label>
+          <label class="checkbox-option">
+            <input type="checkbox" id="outerlink-nofollow" />
+            <span>Add <code>rel="nofollow"</code> (sponsored or non-endorsed reference)</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-insert-outerlink">
+          Insert Outer Link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Smart Link Suggestions Modal -->
+  <div class="toolbar-modal" id="suggestions-modal" style="display: none;">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">&#128161; Algorithmic Internal Link Recommendations</h3>
+        <button type="button" class="modal-close" data-close-modal>&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="suggestions-intro">
+          Contextual matches discovered from existing published articles based on category relevance and title keywords.
+        </p>
+        <div class="results-list" id="suggestions-results-list">
+          <div class="loading-state">Analyzing relevance...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const wrapper = document.querySelector('.editor-toolbar-wrapper');
+    if (!wrapper) return;
+
+    const textareaId = wrapper.dataset.textareaId;
+    const articleId = wrapper.dataset.articleId || '';
+    const categoryId = wrapper.dataset.categoryId || '';
+    const textarea = document.getElementById(textareaId);
+    if (!textarea) return;
+
+    // Modals
+    const interlinkModal = document.getElementById('interlink-modal');
+    const outerlinkModal = document.getElementById('outerlink-modal');
+    const suggestionsModal = document.getElementById('suggestions-modal');
+
+    const interlinkSearchInput = document.getElementById('interlink-search-input');
+    const interlinkAnchorInput = document.getElementById('interlink-anchor-input');
+    const interlinkResultsList = document.getElementById('interlink-results-list');
+    const btnInsertInterlink = document.getElementById('btn-insert-interlink');
+
+    const outerlinkUrlInput = document.getElementById('outerlink-url-input');
+    const outerlinkAnchorInput = document.getElementById('outerlink-anchor-input');
+    const outerlinkNewTab = document.getElementById('outerlink-newtab');
+    const outerlinkNoFollow = document.getElementById('outerlink-nofollow');
+    const btnInsertOuterlink = document.getElementById('btn-insert-outerlink');
+
+    const suggestionsResultsList = document.getElementById('suggestions-results-list');
+
+    let selectedArticle = null;
+
+    // Helper to get selected text in textarea
+    function getSelection() {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selectedText = textarea.value.substring(start, end);
+      return { start, end, selectedText };
+    }
+
+    // Helper to replace/insert text at cursor
+    function insertTextAtCursor(textToInsert, selectInserted = false) {
+      const { start, end } = getSelection();
+      const val = textarea.value;
+      textarea.value = val.substring(0, start) + textToInsert + val.substring(end);
+      
+      const newCursorPos = start + textToInsert.length;
+      textarea.focus();
+      if (selectInserted) {
+        textarea.setSelectionRange(start, newCursorPos);
+      } else {
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+
+      // Trigger input event for any change listeners
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // Helper to wrap selected text
+    function wrapSelection(before, after, defaultText = 'text') {
+      const { start, selectedText } = getSelection();
+      const content = selectedText || defaultText;
+      const replacement = before + content + after;
+      insertTextAtCursor(replacement);
+      
+      if (!selectedText) {
+        // Highlight placeholder text
+        textarea.setSelectionRange(start + before.length, start + before.length + content.length);
+      }
+    }
+
+    // Toolbar Action Buttons Handler
+    wrapper.addEventListener('click', (e) => {
+      const btn = e.target.closest('.toolbar-btn');
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      if (!action) return;
+
+      switch (action) {
+        case 'bold':
+          wrapSelection('**', '**', 'bold text');
+          break;
+        case 'italic':
+          wrapSelection('*', '*', 'italic text');
+          break;
+        case 'h2':
+          wrapSelection('\n\n## ', '\n\n', 'Section Heading');
+          break;
+        case 'h3':
+          wrapSelection('\n\n### ', '\n\n', 'Subheading');
+          break;
+        case 'quote':
+          wrapSelection('\n\n> ', '\n\n', 'Quoted statement');
+          break;
+        case 'ul':
+          wrapSelection('\n- ', '\n', 'List item');
+          break;
+        case 'ol':
+          wrapSelection('\n1. ', '\n', 'Numbered step');
+          break;
+        case 'code':
+          const sel = getSelection();
+          if (sel.selectedText.includes('\n')) {
+            wrapSelection('\n```\n', '\n```\n', 'code block');
+          } else {
+            wrapSelection('`', '`', 'code');
+          }
+          break;
+        case 'table':
+          insertTextAtCursor('\n\n| Feature | Specification | Notes |\n| :--- | :--- | :--- |\n| Battery Capacity | 75 kWh | Liquid-cooled |\n| DC Fast Charging | 150 kW | 10-80% in 28 min |\n\n');
+          break;
+        case 'open-interlink':
+          openInterlinkModal();
+          break;
+        case 'open-outerlink':
+          openOuterlinkModal();
+          break;
+        case 'open-suggestions':
+          openSuggestionsModal();
+          break;
+      }
+    });
+
+    // Close modal handlers
+    document.querySelectorAll('[data-close-modal]').forEach((el) => {
+      el.addEventListener('click', () => {
+        interlinkModal.style.display = 'none';
+        outerlinkModal.style.display = 'none';
+        suggestionsModal.style.display = 'none';
+      });
+    });
+
+    // -------------------------------------------------------------------------
+    // 1. Interlink Modal Logic
+    // -------------------------------------------------------------------------
+    function openInterlinkModal() {
+      const { selectedText } = getSelection();
+      interlinkAnchorInput.value = selectedText || '';
+      interlinkSearchInput.value = '';
+      selectedArticle = null;
+      btnInsertInterlink.disabled = true;
+      interlinkModal.style.display = 'flex';
+      interlinkSearchInput.focus();
+
+      fetchArticles('');
+    }
+
+    let searchTimeout = null;
+    interlinkSearchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim();
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        fetchArticles(q);
+      }, 250);
+    });
+
+    async function fetchArticles(query) {
+      interlinkResultsList.innerHTML = '<div class="loading-state">Searching articles...</div>';
+      try {
+        const url = `/api/admin/articles/search-links?q=${encodeURIComponent(query)}&excludeId=${encodeURIComponent(articleId)}&categoryId=${encodeURIComponent(categoryId)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        renderArticleResults(data.articles || []);
+      } catch (err) {
+        interlinkResultsList.innerHTML = '<div class="error-state">Failed to load articles.</div>';
+      }
+    }
+
+    function renderArticleResults(articles) {
+      if (articles.length === 0) {
+        interlinkResultsList.innerHTML = '<div class="empty-state">No published articles found matching search.</div>';
+        return;
+      }
+
+      interlinkResultsList.innerHTML = articles.map((art) => `
+        <div class="result-item" data-id="${art.id}" data-slug="${art.slug}" data-title="${encodeURIComponent(art.title)}">
+          <div class="result-title">${art.title}</div>
+          <div class="result-meta">
+            <span class="result-slug">/article/${art.slug}</span>
+            ${art.category_name ? `<span class="result-cat">${art.category_name}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      interlinkResultsList.querySelectorAll('.result-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          interlinkResultsList.querySelectorAll('.result-item').forEach((i) => i.classList.remove('selected'));
+          item.classList.add('selected');
+          
+          selectedArticle = {
+            id: item.dataset.id,
+            slug: item.dataset.slug,
+            title: decodeURIComponent(item.dataset.title),
+          };
+
+          if (!interlinkAnchorInput.value.trim()) {
+            interlinkAnchorInput.value = selectedArticle.title;
+          }
+
+          btnInsertInterlink.disabled = false;
+        });
+      });
+    }
+
+    btnInsertInterlink.addEventListener('click', () => {
+      if (!selectedArticle) return;
+      const anchor = interlinkAnchorInput.value.trim() || selectedArticle.title;
+      const markdownLink = `[${anchor}](/article/${selectedArticle.slug})`;
+      
+      insertTextAtCursor(markdownLink);
+      interlinkModal.style.display = 'none';
+    });
+
+    // -------------------------------------------------------------------------
+    // 2. Outer Link Modal Logic
+    // -------------------------------------------------------------------------
+    function openOuterlinkModal() {
+      const { selectedText } = getSelection();
+      outerlinkAnchorInput.value = selectedText || '';
+      outerlinkUrlInput.value = '';
+      outerlinkModal.style.display = 'flex';
+      outerlinkUrlInput.focus();
+    }
+
+    btnInsertOuterlink.addEventListener('click', () => {
+      const rawUrl = outerlinkUrlInput.value.trim();
+      const anchor = outerlinkAnchorInput.value.trim() || rawUrl;
+
+      if (!rawUrl) {
+        outerlinkUrlInput.focus();
+        return;
+      }
+
+      const formattedUrl = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `https://${rawUrl}`;
+      const isNewTab = outerlinkNewTab.checked;
+      const isNoFollow = outerlinkNoFollow.checked;
+
+      let linkCode = '';
+      if (isNewTab || isNoFollow) {
+        const relParts = ['noopener', 'noreferrer'];
+        if (isNoFollow) relParts.push('nofollow');
+        const targetAttr = isNewTab ? ' target="_blank"' : '';
+        linkCode = `<a href="${formattedUrl}"${targetAttr} rel="${relParts.join(' ')}">${anchor}</a>`;
+      } else {
+        linkCode = `[${anchor}](${formattedUrl})`;
+      }
+
+      insertTextAtCursor(linkCode);
+      outerlinkModal.style.display = 'none';
+    });
+
+    // -------------------------------------------------------------------------
+    // 3. Smart Link Suggestions Logic
+    // -------------------------------------------------------------------------
+    async function openSuggestionsModal() {
+      suggestionsModal.style.display = 'flex';
+      suggestionsResultsList.innerHTML = '<div class="loading-state">Analyzing relevant articles...</div>';
+
+      try {
+        const titleVal = document.getElementById('title')?.value || '';
+        const keywords = titleVal.split(' ').filter((w) => w.length > 3).join(',');
+
+        const url = `/api/admin/articles/search-links?keywords=${encodeURIComponent(keywords)}&excludeId=${encodeURIComponent(articleId)}&categoryId=${encodeURIComponent(categoryId)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const candidates = data.candidates || [];
+
+        if (candidates.length === 0) {
+          suggestionsResultsList.innerHTML = '<div class="empty-state">No high-confidence suggestions found. Try searching directly in Interlink.</div>';
+          return;
+        }
+
+        suggestionsResultsList.innerHTML = candidates.map((c) => `
+          <div class="suggestion-card">
+            <div class="suggestion-main">
+              <div class="suggestion-title">${c.title}</div>
+              <div class="suggestion-meta">
+                <span class="score-badge">Relevance: ${c.relevanceScore}%</span>
+                ${c.category ? `<span class="cat-badge">${c.category}</span>` : ''}
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm btn-quick-insert" data-slug="${c.slug}" data-title="${encodeURIComponent(c.title)}">
+              Insert Link
+            </button>
+          </div>
+        `).join('');
+
+        suggestionsResultsList.querySelectorAll('.btn-quick-insert').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const slug = btn.dataset.slug;
+            const title = decodeURIComponent(btn.dataset.title);
+            const { selectedText } = getSelection();
+            const anchor = selectedText || title;
+            insertTextAtCursor(`[${anchor}](/article/${slug})`);
+            suggestionsModal.style.display = 'none';
+          });
+        });
+      } catch (err) {
+        suggestionsResultsList.innerHTML = '<div class="error-state">Failed to load suggestions.</div>';
+      }
+    }
+  });
+</script>
+
+<style>
+  .editor-toolbar-wrapper {
+    position: relative;
+    margin-bottom: 0.5rem;
+  }
+
+  .editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+    background-color: var(--color-surface-subtle, #f8fafc);
+    border: 1px solid var(--color-border);
+    border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    flex-wrap: wrap;
+  }
+
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 18px;
+    background-color: var(--color-border);
+    margin: 0 0.25rem;
+  }
+
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    font-weight: 500;
+    background-color: var(--color-surface, #ffffff);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-main);
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.15s ease;
+  }
+
+  .toolbar-btn:hover {
+    background-color: #f1f5f9;
+    border-color: #cbd5e1;
+    color: var(--color-brand-accent, #0284c7);
+  }
+
+  .btn-highlight {
+    background-color: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+    font-weight: 600;
+  }
+
+  .btn-highlight:hover {
+    background-color: #dbeafe;
+  }
+
+  .btn-highlight-alt {
+    background-color: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #15803d;
+    font-weight: 600;
+  }
+
+  .btn-highlight-alt:hover {
+    background-color: #dcfce7;
+  }
+
+  .btn-icon {
+    font-size: 0.875rem;
+  }
+
+  /* Modals */
+  .toolbar-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(2px);
+  }
+
+  .modal-dialog {
+    position: relative;
+    background-color: var(--color-surface, #ffffff);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    width: 90%;
+    max-width: 580px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-surface-subtle);
+  }
+
+  .modal-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .form-group-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .modal-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .modal-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .checkbox-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    margin-top: 0.25rem;
+  }
+
+  .search-results-container {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .results-header {
+    background-color: var(--color-surface-subtle);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .results-list {
+    max-height: 200px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .result-item {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--color-border-subtle, #f1f5f9);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+  }
+
+  .result-item:hover {
+    background-color: #f8fafc;
+  }
+
+  .result-item.selected {
+    background-color: #eff6ff;
+    border-left: 3px solid #3b82f6;
+  }
+
+  .result-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin-bottom: 0.2rem;
+  }
+
+  .result-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.75rem;
+  }
+
+  .result-slug {
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .result-cat {
+    background-color: var(--color-surface-subtle);
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+  }
+
+  .suggestion-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+    gap: 0.75rem;
+  }
+
+  .suggestion-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .suggestion-meta {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .score-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #15803d;
+    background-color: #dcfce7;
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .cat-badge {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .suggestions-intro {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .loading-state, .empty-state, .error-state {
+    padding: 1.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    background-color: var(--color-surface-subtle);
+  }
+</style>
