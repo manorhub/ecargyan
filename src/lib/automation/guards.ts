@@ -109,6 +109,16 @@ export class PublishingGuard {
       }
     }
 
+    // 8. Featured Image Requirement Gate
+    const requireImageSetting = await this.db
+      .prepare("SELECT value FROM site_settings WHERE key = 'require_featured_image'")
+      .first<{ value: string }>();
+    const requireImage = requireImageSetting ? requireImageSetting.value === '1' || requireImageSetting.value === 'true' : true;
+
+    if (requireImage && !article.featured_image_id) {
+      reasons.push('Featured editorial image is missing (Required by publishing policy). Image generation or manual review required.');
+    }
+
     if (reasons.length > 0) {
       return {
         passed: false,

@@ -11,6 +11,8 @@ export interface CloudflareEnv {
   SESSION_SECRET?: string;
   ENVIRONMENT?: string;
   PUBLIC_SITE_URL?: string;
+  DEEPSEEK_API_KEY?: string;
+  RUNWARE_API_KEY?: string;
 }
 
 declare global {

@@ -17,13 +17,15 @@ if (!article) return Astro.redirect('/admin/articles', 302);
 
 let errorMessage = '';
 
-const [categories, authors, tags, mediaList] = await Promise.all([
+const [categories, authors, tags, mediaList, articleImages] = await Promise.all([
   dbService.listCategories(),
   dbService.listAuthors(),
   dbService.listTags(),
   dbService.listMedia(50, 0),
+  dbService.getArticleImages(id),
 ]);
 
+const activeImage = articleImages.find((i) => i.is_featured === 1) || null;
 const currentTagIds = new Set((article.tags || []).map((t) => t.id));
 
 if (Astro.request.method === 'POST') {
@@ -313,13 +315,104 @@ function toDatetimeInput(ts: number | null): string {
           </div>
         </div>
 
-        <!-- Featured Media -->
+        <!-- Featured Media & AI Visuals -->
         <div class="sidebar-card">
-          <h2 class="card-title">Featured Image</h2>
-          <div class="form-group">
-            <label for="featured_image_id" class="form-label">Select Media Asset</label>
-            <select id="featured_image_id" name="featured_image_id" class="form-input">
-              <option value="">— None —</option>
+          <div class="card-header-flex">
+            <h2 class="card-title">Editorial Image</h2>
+            <span class="provider-badge">FLUX.1 [schnell]</span>
+          </div>
+
+          {activeImage ? (
+            <div class="active-image-wrap">
+              <div class="image-preview-container">
+                <img
+                  src={activeImage.public_url}
+                  alt={activeImage.alt_text}
+                  class="featured-thumb"
+                />
+                <span class="version-tag">v{activeImage.version}</span>
+              </div>
+              <div class="image-meta-info">
+                <div class="meta-row">
+                  <span class="meta-lbl">Model:</span>
+                  <span class="meta-val">{activeImage.model}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">Cost:</span>
+                  <span class="meta-val">${activeImage.cost || 0}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">Dimensions:</span>
+                  <span class="meta-val">{activeImage.width}&times;{activeImage.height} ({activeImage.format})</span>
+                </div>
+                <div class="meta-row alt-row">
+                  <span class="meta-lbl">Alt text:</span>
+                  <span class="meta-val alt-text-preview">&ldquo;{activeImage.alt_text}&rdquo;</span>
+                </div>
+              </div>
+
+              <!-- Regeneration Form -->
+              <form action={`/admin/articles/${article.id}/images/generate`} method="POST" class="image-action-form">
+                <input type="hidden" name="forceRegenerate" value="true" />
+                <input
+                  type="text"
+                  name="customSubject"
+                  placeholder="Custom visual tweak (optional)..."
+                  class="form-input form-input-sm"
+                />
+                <div class="image-btn-row">
+                  <button type="submit" class="btn btn-secondary btn-sm">
+                    &#8635; Regenerate
+                  </button>
+                  <button type="submit" form="remove-img-form" class="btn btn-danger-link btn-sm">
+                    Detach
+                  </button>
+                </div>
+              </form>
+              <form id="remove-img-form" action={`/admin/articles/${article.id}/images/remove`} method="POST" style="display: none;"></form>
+            </div>
+          ) : (
+            <div class="no-image-banner">
+              <p class="empty-img-text">No custom editorial image generated yet.</p>
+              <form action={`/admin/articles/${article.id}/images/generate`} method="POST" class="generate-form">
+                <input
+                  type="text"
+                  name="customSubject"
+                  placeholder="Optional prompt subject override..."
+                  class="form-input form-input-sm"
+                />
+                <button type="submit" class="btn btn-primary btn-block btn-sm">
+                  &#10024; Generate with FLUX.1
+                </button>
+              </form>
+            </div>
+          )}
+
+          {articleImages.length > 1 && (
+            <div class="image-versions-history">
+              <h3 class="versions-title">Version History ({articleImages.length})</h3>
+              <div class="versions-list">
+                {articleImages.map((img) => (
+                  <div class:list={['version-item', { active: img.is_featured === 1 }]}>
+                    <div class="version-meta">
+                      <strong>v{img.version}</strong> &bull; {img.format} &bull; ${img.cost || 0}
+                    </div>
+                    {img.is_featured === 0 && (
+                      <form action={`/admin/articles/${article.id}/images/set-featured`} method="POST">
+                        <input type="hidden" name="imageId" value={img.id} />
+                        <button type="submit" class="btn btn-outline-xs">Set Active</button>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div class="form-group select-existing-wrap">
+            <label for="featured_image_id" class="form-label">Or Pick From Media Library</label>
+            <select id="featured_image_id" name="featured_image_id" class="form-input form-input-sm">
+              <option value="">— Use Generated Image —</option>
               {mediaList.map((m) => (
                 <option value={m.id} selected={article.featured_image_id === m.id}>{m.filename}</option>
               ))}
@@ -489,10 +582,201 @@ function toDatetimeInput(ts: number | null): string {
     margin-bottom: 1.5rem;
   }
 
-  .alert-danger {
-    background-color: var(--color-danger-bg);
+  .card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .provider-badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-brand-accent);
+  }
+
+  .active-image-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .image-preview-container {
+    position: relative;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    background-color: #000;
+    aspect-ratio: 16/9;
+  }
+
+  .featured-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .version-tag {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .image-meta-info {
+    font-size: 0.75rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .meta-lbl {
+    color: var(--color-text-muted);
+  }
+
+  .meta-val {
+    font-weight: 600;
+    color: var(--color-text-main);
+    font-family: var(--font-mono);
+  }
+
+  .alt-text-preview {
+    font-family: var(--font-sans);
+    font-weight: normal;
+    font-style: italic;
+    font-size: 0.71875rem;
+    text-align: right;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .image-action-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .image-btn-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .btn-danger-link {
     color: var(--color-danger);
-    border: 1px solid #fecaca;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    text-decoration: underline;
+  }
+
+  .no-image-banner {
+    background-color: var(--color-surface-subtle);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .empty-img-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem 0;
+  }
+
+  .generate-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .image-versions-history {
+    margin-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
+  }
+
+  .versions-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin: 0 0 0.5rem 0;
+  }
+
+  .versions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .version-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+  }
+
+  .version-item.active {
+    border-color: var(--color-brand-accent);
+    background-color: #f0fdf4;
+  }
+
+  .btn-outline-xs {
+    font-size: 0.6875rem;
+    padding: 0.1rem 0.35rem;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .btn-outline-xs:hover {
+    background-color: var(--color-surface);
+  }
+
+  .select-existing-wrap {
+    margin-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
+  }
+
+  .form-input-sm {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-sm {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8125rem;
   }
 
   @media (max-width: 960px) {

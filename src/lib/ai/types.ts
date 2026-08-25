@@ -5,9 +5,9 @@
 export interface DeepSeekConfig {
   apiKey: string;
   baseUrl?: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
   timeoutMs?: number;
 }
 

@@ -24,6 +24,8 @@ import type {
   PolicyStatus,
   LicenseType,
   SourceTier,
+  ArticleImageRecord,
+  ImageGenerationJobRecord,
 } from './schema';
 import { logError, logInfo } from '../utils/logger';
 
@@ -2547,6 +2549,83 @@ export class DatabaseService {
     } catch (error) {
       logError('Failed to fetch source policy metrics', error);
       return { allowed: 0, restricted: 0, blocked: 0, reviewRequired: 0, unknown: 0, total: 0 };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // IMAGE GENERATION & FLUX.1 PROVENANCE
+  // ---------------------------------------------------------------------------
+
+  async getArticleImages(articleId: string): Promise<ArticleImageRecord[]> {
+    try {
+      const stmt = this.db
+        .prepare('SELECT * FROM article_images WHERE article_id = ? ORDER BY version DESC')
+        .bind(articleId);
+      const result = await stmt.all<ArticleImageRecord>();
+      return result.results || [];
+    } catch (error) {
+      logError('Failed to fetch article images', error);
+      return [];
+    }
+  }
+
+  async getFeaturedArticleImage(articleId: string): Promise<ArticleImageRecord | null> {
+    try {
+      const stmt = this.db
+        .prepare('SELECT * FROM article_images WHERE article_id = ? AND is_featured = 1 LIMIT 1')
+        .bind(articleId);
+      const result = await stmt.first<ArticleImageRecord>();
+      return result || null;
+    } catch (error) {
+      logError('Failed to fetch featured article image', error);
+      return null;
+    }
+  }
+
+  async getImageGenerationJobs(limit = 20, offset = 0): Promise<{ jobs: ImageGenerationJobRecord[]; total: number }> {
+    try {
+      const countRes = await this.db.prepare('SELECT COUNT(*) as total FROM image_generation_jobs').first<{ total: number }>();
+      const total = countRes?.total || 0;
+
+      const stmt = this.db
+        .prepare('SELECT * FROM image_generation_jobs ORDER BY created_at DESC LIMIT ? OFFSET ?')
+        .bind(limit, offset);
+      const result = await stmt.all<ImageGenerationJobRecord>();
+
+      return { jobs: result.results || [], total };
+    } catch (error) {
+      logError('Failed to list image generation jobs', error);
+      return { jobs: [], total: 0 };
+    }
+  }
+
+  async getImageGenerationMetrics(): Promise<{
+    totalGenerations: number;
+    successfulGenerations: number;
+    failedGenerations: number;
+    totalReportedCost: number;
+  }> {
+    try {
+      const stats = await this.db
+        .prepare(
+          `SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as successful,
+            SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed,
+            SUM(cost) as total_cost
+          FROM image_generation_jobs`
+        )
+        .first<{ total: number; successful: number; failed: number; total_cost: number }>();
+
+      return {
+        totalGenerations: stats?.total || 0,
+        successfulGenerations: stats?.successful || 0,
+        failedGenerations: stats?.failed || 0,
+        totalReportedCost: Math.round((stats?.total_cost || 0) * 1000) / 1000,
+      };
+    } catch (error) {
+      logError('Failed to fetch image generation metrics', error);
+      return { totalGenerations: 0, successfulGenerations: 0, failedGenerations: 0, totalReportedCost: 0 };
     }
   }
 }

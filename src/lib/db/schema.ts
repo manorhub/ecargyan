@@ -205,6 +205,15 @@ export type {
   SourcePolicyDecision,
 } from '../sources/types';
 
+export type {
+  ImageJobStatus,
+  ImageProviderType,
+  ImageBrief,
+  ImageGenerationJobRecord,
+  ArticleImageRecord,
+  GenerationPipelineResult,
+} from '../images/types';
+
 
 
 

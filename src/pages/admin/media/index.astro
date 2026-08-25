@@ -10,7 +10,10 @@ const search = url.searchParams.get('q') || '';
 const successMsg = url.searchParams.get('success') || '';
 const errorMsg = url.searchParams.get('error') || '';
 
-const mediaItems = dbService ? await dbService.listMedia(50, 0, search) : [];
+const [mediaItems, imageMetrics] = dbService ? await Promise.all([
+  dbService.listMedia(50, 0, search),
+  dbService.getImageGenerationMetrics(),
+]) : [[], { totalGenerations: 0, successfulGenerations: 0, failedGenerations: 0, totalReportedCost: 0 }];
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -22,10 +25,36 @@ function formatFileSize(bytes: number): string {
 <AdminLayout title="Media Library" currentPath="/admin/media">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Media & Asset Library</h1>
+      <h1 class="page-title">Media &amp; Asset Library</h1>
       <p class="page-description">
-        Direct Cloudflare R2 object storage for editorial imagery and graphics.
+        Direct Cloudflare R2 object storage with Runware FLUX.1 [schnell] integration.
       </p>
+    </div>
+    <div class="header-actions">
+      <form action="/admin/media/bulk-generate" method="POST">
+        <button type="submit" class="btn btn-primary">
+          &#10024; Generate Missing Article Images
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="image-stats-banner">
+    <div class="stat-card">
+      <span class="stat-lbl">AI Generations</span>
+      <span class="stat-val">{imageMetrics.totalGenerations}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-lbl">Successful</span>
+      <span class="stat-val text-success">{imageMetrics.successfulGenerations}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-lbl">Failed</span>
+      <span class="stat-val text-danger">{imageMetrics.failedGenerations}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-lbl">Actual Reported Cost</span>
+      <span class="stat-val">${imageMetrics.totalReportedCost}</span>
     </div>
   </div>
 
@@ -134,19 +163,48 @@ function formatFileSize(bytes: number): string {
 
 <style>
   .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .image-stats-banner {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
     margin-bottom: 2rem;
   }
 
-  .page-title {
-    font-size: 1.875rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
+  .stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
-  .page-description {
-    font-size: 0.9375rem;
+  .stat-lbl {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--color-text-muted);
   }
+
+  .stat-val {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-text-main);
+  }
+
+  .text-success { color: var(--color-success, #16a34a); }
+  .text-danger { color: var(--color-danger, #dc2626); }
 
   .media-layout {
     display: grid;
