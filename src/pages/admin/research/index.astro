@@ -134,132 +134,153 @@ function getFreshnessClass(freshness: string): string {
     </form>
   </div>
 
-  <div class="table-card">
-    <div class="card-header">
-      <h2 class="card-title">Research Items ({researchData.total})</h2>
-    </div>
-
-    {researchData.items.length === 0 ? (
-      <div class="empty-box">
-        <p class="empty-text">No research records yet.</p>
-        <span class="empty-subtext">Ingest source feeds in the Source Registry, then trigger "Process Pending Source Items" to populate this pool.</span>
-        <div class="empty-action">
-          <a href="/admin/sources" class="btn btn-secondary">Open Source Registry</a>
+  <form id="bulk-research-form" action="/admin/research/bulk-delete" method="POST" onsubmit="return confirm('Permanently delete all selected research records?');">
+    <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
+    
+    <div class="table-card">
+      <div class="card-header">
+        <div class="card-header-left">
+          <h2 class="card-title">Research Items ({researchData.total})</h2>
+        </div>
+        <div class="card-header-right">
+          <div id="bulk-actions-toolbar" class="bulk-toolbar" style="display: none;">
+            <span id="selected-count-badge" class="badge badge-neutral">0 selected</span>
+            <button type="submit" class="btn btn-danger btn-sm" style="background-color: #ef4444; border-color: #dc2626; color: #fff;">
+              🗑 Delete Selected
+            </button>
+          </div>
         </div>
       </div>
-    ) : (
-      <div class="table-responsive">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th class="col-headline">Research Headline</th>
-              <th class="col-type">Type</th>
-              <th class="col-topic">Topic</th>
-              <th class="col-sources">Sources</th>
-              <th class="col-score">Score</th>
-              <th class="col-freshness">Freshness</th>
-              <th class="col-updated">Updated</th>
-              <th class="col-actions text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {researchData.items.map((item) => {
-              const freshness = calculateFreshness(item.first_seen_at);
-              return (
-                <tr>
-                  <td class="col-headline">
-                    <a href={`/admin/research/${item.id}`} class="research-title-link">
-                      {item.title}
-                    </a>
-                    {item.summary && (
-                      <span class="research-summary-hint">{item.summary}</span>
-                    )}
-                  </td>
-                  <td class="col-type">
-                    <span class="type-pill">{item.content_type.toUpperCase()}</span>
-                  </td>
-                  <td class="col-topic">
-                    {item.topic_name ? (
-                      <span class="topic-badge">{item.topic_name}</span>
-                    ) : (
-                      <span class="text-muted">—</span>
-                    )}
-                  </td>
-                  <td class="col-sources">
-                    <span class:list={['sources-pill', { 'multi-source': item.source_count > 1 }]}>
-                      {item.source_count} {item.source_count === 1 ? 'source' : 'sources'}
-                    </span>
-                  </td>
-                  <td class="col-score">
-                    <span class:list={['badge', getImportanceClass(item.importance)]}>
-                      {item.importance} / 100
-                    </span>
-                  </td>
-                  <td class="col-freshness">
-                    <span class:list={['badge', getFreshnessClass(freshness)]}>
-                      {freshness.toUpperCase()}
-                    </span>
-                  </td>
-                  <td class="col-updated">
-                    <span class="date-text">{formatDate(item.last_updated_at)}</span>
-                  </td>
-                  <td class="col-actions text-right">
-                    <div class="actions-group">
-                      <a href={`/admin/research/${item.id}`} class="btn btn-secondary btn-xs">
-                        Inspect
+
+      {researchData.items.length === 0 ? (
+        <div class="empty-box">
+          <p class="empty-text">No research records yet.</p>
+          <span class="empty-subtext">Ingest source feeds in the Source Registry, then trigger "Process Pending Source Items" to populate this pool.</span>
+          <div class="empty-action">
+            <a href="/admin/sources" class="btn btn-secondary">Open Source Registry</a>
+          </div>
+        </div>
+      ) : (
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th class="col-checkbox">
+                  <input type="checkbox" id="select-all-research" title="Select All" />
+                </th>
+                <th class="col-headline">Research Headline</th>
+                <th class="col-type">Type</th>
+                <th class="col-topic">Topic</th>
+                <th class="col-sources">Sources</th>
+                <th class="col-score">Score</th>
+                <th class="col-freshness">Freshness</th>
+                <th class="col-updated">Updated</th>
+                <th class="col-actions text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {researchData.items.map((item) => {
+                const freshness = calculateFreshness(item.first_seen_at);
+                return (
+                  <tr>
+                    <td class="col-checkbox">
+                      <input type="checkbox" name="ids" value={item.id} class="research-row-check" />
+                    </td>
+                    <td class="col-headline">
+                      <a href={`/admin/research/${item.id}`} class="research-title-link">
+                        {item.title}
                       </a>
-                      {item.status !== 'ignored' ? (
-                        <form action="/admin/research/ignore" method="POST" style="display:inline;">
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="status" value="ignored" />
-                          <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
-                          <button type="submit" class="btn btn-secondary btn-xs" title="Mark Ignored">
+                      {item.summary && (
+                        <span class="research-summary-hint">{item.summary}</span>
+                      )}
+                    </td>
+                    <td class="col-type">
+                      <span class="type-pill">{item.content_type.toUpperCase()}</span>
+                    </td>
+                    <td class="col-topic">
+                      {item.topic_name ? (
+                        <span class="topic-badge">{item.topic_name}</span>
+                      ) : (
+                        <span class="text-muted">—</span>
+                      )}
+                    </td>
+                    <td class="col-sources">
+                      <span class:list={['sources-pill', { 'multi-source': item.source_count > 1 }]}>
+                        {item.source_count} {item.source_count === 1 ? 'source' : 'sources'}
+                      </span>
+                    </td>
+                    <td class="col-score">
+                      <span class:list={['badge', getImportanceClass(item.importance)]}>
+                        {item.importance} / 100
+                      </span>
+                    </td>
+                    <td class="col-freshness">
+                      <span class:list={['badge', getFreshnessClass(freshness)]}>
+                        {freshness.toUpperCase()}
+                      </span>
+                    </td>
+                    <td class="col-updated">
+                      <span class="date-text">{formatDate(item.last_updated_at)}</span>
+                    </td>
+                    <td class="col-actions text-right">
+                      <div class="actions-group">
+                        <a href={`/admin/research/${item.id}`} class="btn btn-secondary btn-xs">
+                          Inspect
+                        </a>
+                        {item.status !== 'ignored' ? (
+                          <button type="submit" form={`ignore-form-${item.id}`} class="btn btn-secondary btn-xs" title="Mark Ignored">
                             Ignore
                           </button>
-                        </form>
-                      ) : (
-                        <form action="/admin/research/ignore" method="POST" style="display:inline;">
-                          <input type="hidden" name="id" value={item.id} />
-                          <input type="hidden" name="status" value="ready" />
-                          <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
-                          <button type="submit" class="btn btn-secondary btn-xs" title="Restore to Ready">
+                        ) : (
+                          <button type="submit" form={`ignore-form-${item.id}`} class="btn btn-secondary btn-xs" title="Restore to Ready">
                             Restore
                           </button>
-                        </form>
-                      )}
-                      <form action="/admin/research/delete" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this research record and its associated facts?');">
-                        <input type="hidden" name="id" value={item.id} />
-                        <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
-                        <button type="submit" class="btn btn-danger btn-xs" title="Permanently Delete">
+                        )}
+                        <button type="submit" form={`delete-form-${item.id}`} class="btn btn-danger btn-xs" title="Permanently Delete">
                           Delete
                         </button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-    {totalPages > 1 && (
-      <div class="pagination">
-        {page > 1 && (
-          <a href={`?page=${page - 1}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} class="btn btn-secondary btn-sm">
-            &larr; Previous
-          </a>
-        )}
-        <span class="page-info">Page {page} of {totalPages}</span>
-        {page < totalPages && (
-          <a href={`?page=${page + 1}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} class="btn btn-secondary btn-sm">
-            Next &rarr;
-          </a>
-        )}
-      </div>
-    )}
-  </div>
+      {totalPages > 1 && (
+        <div class="pagination">
+          {page > 1 && (
+            <a href={`?page=${page - 1}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} class="btn btn-secondary btn-sm">
+              &larr; Previous
+            </a>
+          )}
+          <span class="page-info">Page {page} of {totalPages}</span>
+          {page < totalPages && (
+            <a href={`?page=${page + 1}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} class="btn btn-secondary btn-sm">
+              Next &rarr;
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  </form>
+
+  <!-- External standalone action forms to avoid nested form conflicts -->
+  {researchData.items.map((item) => (
+    <>
+      <form id={`ignore-form-${item.id}`} action="/admin/research/ignore" method="POST" style="display:none;">
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="status" value={item.status !== 'ignored' ? 'ignored' : 'ready'} />
+        <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
+      </form>
+      <form id={`delete-form-${item.id}`} action="/admin/research/delete" method="POST" style="display:none;" onsubmit={`return confirm('Permanently delete research record: “${item.title.replace(/'/g, "\\'")}”?');`}>
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
+      </form>
+    </>
+  ))}
 </AdminLayout>
 
 <style>
@@ -495,22 +516,70 @@ function getFreshnessClass(freshness: string): string {
     color: var(--color-text-muted);
   }
 
-  .alert {
-    padding: 0.75rem 1rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-    margin-bottom: 1.5rem;
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
   }
 
-  .alert-success {
-    background-color: var(--color-success-bg);
-    color: var(--color-success);
-    border: 1px solid #bbf7d0;
+  .bulk-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
   }
 
-  .alert-danger {
-    background-color: var(--color-danger-bg);
-    color: var(--color-danger);
-    border: 1px solid #fecaca;
+  .col-checkbox {
+    width: 36px;
+    min-width: 36px;
+    text-align: center;
+    padding-left: 1rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  .col-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
   }
 </style>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const selectAll = document.getElementById('select-all-research');
+    const rowChecks = document.querySelectorAll('.research-row-check');
+    const bulkToolbar = document.getElementById('bulk-actions-toolbar');
+    const countBadge = document.getElementById('selected-count-badge');
+
+    function updateBulkState() {
+      const checkedBoxes = document.querySelectorAll('.research-row-check:checked');
+      const count = checkedBoxes.length;
+
+      if (count > 0) {
+        if (bulkToolbar) bulkToolbar.style.display = 'flex';
+        if (countBadge) countBadge.textContent = `${count} selected`;
+      } else {
+        if (bulkToolbar) bulkToolbar.style.display = 'none';
+      }
+
+      if (selectAll) {
+        selectAll.checked = (count === rowChecks.length && count > 0);
+        selectAll.indeterminate = (count > 0 && count < rowChecks.length);
+      }
+    }
+
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        rowChecks.forEach((cb) => {
+          cb.checked = selectAll.checked;
+        });
+        updateBulkState();
+      });
+    }
+
+    rowChecks.forEach((cb) => {
+      cb.addEventListener('change', updateBulkState);
+    });
+  });
+</script>

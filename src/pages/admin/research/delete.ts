@@ -20,17 +20,20 @@ export const POST: APIRoute = async ({ request, locals, redirect }) => {
       return redirect(`${returnTo}?error=Invalid+research+item+ID`, 302);
     }
 
+    const item = await dbService.getResearchItemById(id);
+    const itemTitle = item?.title || id;
+
     const success = await dbService.deleteResearchItem(id);
     if (!success) {
       return redirect(`${returnTo}?error=Failed+to+delete+research+item`, 302);
     }
 
     if (locals.admin) {
-      await dbService.logAudit(locals.admin.id, 'delete_research_item', 'research_item', id, { id });
+      await dbService.logAudit(locals.admin.id, 'delete_research_item', 'research_item', id, { title: itemTitle });
     }
 
-    logInfo(`Deleted research item ${id}`);
-    return redirect(`${returnTo}?success=Research+item+deleted+successfully.`, 302);
+    logInfo(`Deleted research item ${id} (${itemTitle})`);
+    return redirect(`${returnTo}?success=Deleted+research+record:+“${encodeURIComponent(itemTitle)}”`, 302);
   } catch (error: any) {
     logError('Error in research delete endpoint', error);
     return redirect(`${returnTo}?error=${encodeURIComponent(error.message || 'Failed to delete research item')}`, 302);
