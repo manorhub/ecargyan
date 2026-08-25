@@ -5,40 +5,68 @@ import { calculateReadingTime } from '../../lib/utils/reading-time';
 
 interface Props {
   article: ArticleWithRelations;
-  variant?: 'hero' | 'standard' | 'compact' | 'horizontal';
+  variant?: 'hero' | 'standard' | 'compact' | 'horizontal' | 'list';
   priorityImage?: boolean;
 }
 
 const { article, variant = 'standard', priorityImage = false } = Astro.props;
 const readingTime = calculateReadingTime(article.content);
 const formattedDate = formatDate(article.published_at);
+const hasImage = Boolean(article.featured_image?.storage_key);
+const imageUrl = hasImage ? `/api/media/${article.featured_image!.storage_key}` : '';
+const altText = article.featured_image?.alt_text || article.title;
 ---
 
 <article class:list={['article-card', `variant-${variant}`]}>
-  {article.featured_image && (
+  {variant !== 'list' && (
     <div class="card-media-wrapper">
       <a href={`/article/${article.slug}`} tabindex="-1" aria-hidden="true" class="card-media-link">
-        <img
-          src={`/api/media/${article.featured_image.storage_key}`}
-          alt={article.featured_image.alt_text || article.title}
-          class="card-img"
-          loading={priorityImage ? 'eager' : 'lazy'}
-          fetchpriority={priorityImage ? 'high' : 'auto'}
-        />
+        {hasImage ? (
+          <img
+            src={imageUrl}
+            alt={altText}
+            class="card-img"
+            loading={priorityImage ? 'eager' : 'lazy'}
+            fetchpriority={priorityImage ? 'high' : 'auto'}
+            decoding="async"
+          />
+        ) : (
+          <div class="card-fallback-media">
+            <div class="fallback-bg-pattern">
+              <svg viewBox="0 0 100 60" preserveAspectRatio="none" class="fallback-svg">
+                <defs>
+                  <linearGradient id="evGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#0f172a" />
+                    <stop offset="100%" stop-color="#1e293b" />
+                  </linearGradient>
+                </defs>
+                <rect width="100" height="60" fill="url(#evGrad)" />
+                <path d="M0 45 Q 25 15, 50 35 T 100 15" stroke="rgba(2, 132, 199, 0.25)" stroke-width="1.5" fill="none" />
+                <path d="M0 55 Q 35 25, 70 45 T 100 25" stroke="rgba(16, 185, 129, 0.15)" stroke-width="1.2" fill="none" />
+              </svg>
+            </div>
+            <div class="fallback-badge-overlay">
+              <span class="fallback-badge">{article.category?.name || 'EV Intelligence'}</span>
+            </div>
+          </div>
+        )}
       </a>
+      {article.category && (variant === 'hero' || variant === 'standard') && (
+        <a href={`/category/${article.category.slug}`} class="card-floating-category">
+          {article.category.name}
+        </a>
+      )}
     </div>
   )}
 
   <div class="card-content">
-    <div class="card-meta-top">
-      {article.category && (
-        <a href={`/category/${article.category.slug}`} class="card-category">
+    {article.category && (variant === 'compact' || variant === 'horizontal' || variant === 'list') && (
+      <div class="card-meta-top">
+        <a href={`/category/${article.category.slug}`} class="category-kicker">
           {article.category.name}
         </a>
-      )}
-      <span class="meta-dot" aria-hidden="true">&bull;</span>
-      <span class="reading-time">{readingTime}</span>
-    </div>
+      </div>
+    )}
 
     <h3 class="card-title">
       <a href={`/article/${article.slug}`}>
@@ -46,14 +74,14 @@ const formattedDate = formatDate(article.published_at);
       </a>
     </h3>
 
-    {article.excerpt && (
+    {article.excerpt && (variant === 'hero' || variant === 'standard') && (
       <p class="card-excerpt">
         {article.excerpt}
       </p>
     )}
 
     <div class="card-byline">
-      {article.author && (
+      {article.author && variant === 'hero' && (
         <span class="byline-author">
           By <a href={`/author/${article.author.slug}`}>{article.author.name}</a>
         </span>
@@ -63,6 +91,8 @@ const formattedDate = formatDate(article.published_at);
           {formattedDate}
         </time>
       )}
+      <span class="byline-dot" aria-hidden="true">&bull;</span>
+      <span class="byline-read">{readingTime}</span>
     </div>
   </div>
 </article>
@@ -74,21 +104,21 @@ const formattedDate = formatDate(article.published_at);
     height: 100%;
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     overflow: hidden;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .article-card:hover {
     border-color: var(--color-border-dark);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
   }
 
   .card-media-wrapper {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
-    background-color: var(--color-surface-subtle);
+    background-color: var(--color-brand);
     overflow: hidden;
   }
 
@@ -102,51 +132,96 @@ const formattedDate = formatDate(article.published_at);
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease;
+    object-position: center;
+    transition: transform 0.35s ease;
+    display: block;
   }
 
   .article-card:hover .card-img {
-    transform: scale(1.02);
+    transform: scale(1.03);
+  }
+
+  /* Fallback Media */
+  .card-fallback-media {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #090d16;
+  }
+
+  .fallback-bg-pattern {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .fallback-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .fallback-badge-overlay {
+    position: relative;
+    z-index: 2;
+  }
+
+  .fallback-badge {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #e0f2fe;
+    background: rgba(2, 132, 199, 0.2);
+    border: 1px solid rgba(2, 132, 199, 0.4);
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-xs);
+  }
+
+  .card-floating-category {
+    position: absolute;
+    top: 0.85rem;
+    left: 0.85rem;
+    z-index: 3;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-xs);
+    background-color: var(--color-brand);
+    color: #ffffff;
+    line-height: 1;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: background-color 0.15s ease;
+  }
+
+  .card-floating-category:hover {
+    background-color: var(--color-electric-accent);
+    color: #ffffff;
   }
 
   .card-content {
-    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex-grow: 1;
+    padding: 1.25rem;
   }
 
   .card-meta-top {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.75rem;
     margin-bottom: 0.5rem;
   }
 
-  .card-category {
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-brand-accent);
-  }
-
-  .card-category:hover {
-    text-decoration: underline;
-  }
-
-  .meta-dot {
-    color: var(--color-text-dim);
-  }
-
-  .reading-time {
-    color: var(--color-text-muted);
-  }
-
   .card-title {
-    font-size: clamp(1.15rem, 3vw, 1.35rem);
-    line-height: 1.25;
-    margin-bottom: 0.75rem;
+    font-size: clamp(1.0625rem, 2vw, 1.25rem);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.65rem;
+    color: var(--color-text-main);
     letter-spacing: -0.015em;
   }
 
@@ -155,118 +230,149 @@ const formattedDate = formatDate(article.published_at);
   }
 
   .card-title a:hover {
-    color: var(--color-brand-accent);
+    color: var(--color-electric-accent);
   }
 
   .card-excerpt {
-    font-size: 0.9375rem;
-    color: var(--color-text-muted);
-    line-height: 1.55;
-    margin-bottom: 1.25rem;
-    flex: 1;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .card-byline {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.8125rem;
-    color: var(--color-text-dim);
-    padding-top: 0.875rem;
-    border-top: 1px solid var(--color-border);
     margin-top: auto;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
   }
 
   .byline-author a {
     color: var(--color-text-main);
-    font-weight: 500;
+    font-weight: 600;
   }
 
   .byline-author a:hover {
-    text-decoration: underline;
+    color: var(--color-electric-accent);
   }
 
-  .byline-date {
-    color: var(--color-text-muted);
+  .byline-dot {
+    color: var(--color-border-dark);
   }
 
-  /* Hero Variant */
+  /* Variant: Hero */
   .variant-hero {
-    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: 1.2fr 1fr;
+    gap: 0;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
   }
 
   .variant-hero .card-media-wrapper {
-    aspect-ratio: auto;
+    aspect-ratio: 16 / 10;
     height: 100%;
-    min-height: 320px;
   }
 
   .variant-hero .card-content {
-    padding: clamp(1.25rem, 3vw, 2.5rem);
+    padding: clamp(1.5rem, 3.5vw, 2.5rem);
+    justify-content: center;
   }
 
   .variant-hero .card-title {
-    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    font-size: clamp(1.4rem, 2.8vw, 2rem);
     line-height: 1.2;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
   }
 
   .variant-hero .card-excerpt {
-    font-size: clamp(0.9375rem, 2vw, 1.0625rem);
-    margin-bottom: 1.5rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-line-clamp: 3;
+    margin-bottom: 1.25rem;
   }
 
-  /* Compact / Horizontal Variant */
+  /* Variant: Compact / Horizontal (Secondary Dispatch) */
   .variant-compact, .variant-horizontal {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 0.85rem;
     border: none;
+    background: transparent;
+    padding: 0.85rem 0;
     border-bottom: 1px solid var(--color-border);
     border-radius: 0;
-    background: transparent;
-    padding: 1.25rem 0;
-    box-shadow: none;
   }
 
   .variant-compact:hover, .variant-horizontal:hover {
-    border-color: var(--color-border-dark);
     box-shadow: none;
+    border-color: var(--color-border-dark);
+  }
+
+  .variant-compact .card-media-wrapper, .variant-horizontal .card-media-wrapper {
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-sm);
   }
 
   .variant-compact .card-content, .variant-horizontal .card-content {
     padding: 0;
   }
 
-  .variant-compact .card-title {
-    font-size: 1.125rem;
+  .variant-compact .card-title, .variant-horizontal .card-title {
+    font-size: 0.9375rem;
+    line-height: 1.35;
     margin-bottom: 0.35rem;
   }
 
-  .variant-compact .card-excerpt {
-    font-size: 0.875rem;
-    margin-bottom: 0.75rem;
+  .variant-compact .card-excerpt, .variant-horizontal .card-excerpt {
+    display: none;
   }
 
+  /* Variant: List */
+  .variant-list {
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 0;
+    background: transparent;
+    padding: 0.75rem 0;
+  }
+
+  .variant-list:hover {
+    box-shadow: none;
+    border-color: var(--color-border-dark);
+  }
+
+  .variant-list .card-content {
+    padding: 0;
+  }
+
+  .variant-list .card-title {
+    font-size: 0.9375rem;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Responsive Rules */
   @media (max-width: 860px) {
     .variant-hero {
       grid-template-columns: 1fr;
     }
-
     .variant-hero .card-media-wrapper {
-      min-height: 200px;
       aspect-ratio: 16 / 9;
-    }
-
-    .variant-hero .card-content {
-      padding: 1.25rem;
     }
   }
 
-  @media (max-width: 640px) {
-    .card-content {
-      padding: 1.25rem;
+  @media (max-width: 480px) {
+    .variant-compact, .variant-horizontal {
+      grid-template-columns: 90px 1fr;
+      gap: 0.75rem;
     }
   }
 </style>

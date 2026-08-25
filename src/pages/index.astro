@@ -13,6 +13,7 @@ const dbService = getDb(runtimeEnv);
 
 let customTagline = SITE_CONFIG.tagline;
 let featuredArticle: ArticleWithRelations | null = null;
+let secondaryArticles: ArticleWithRelations[] = [];
 let latestArticles: ArticleWithRelations[] = [];
 let totalArticles = 0;
 let categoriesWithArticles: CategoryRecord[] = [];
@@ -21,14 +22,26 @@ if (dbService) {
   const [dbTagline, featured, publishedData, activeCategories] = await Promise.all([
     dbService.getSetting('site_tagline'),
     dbService.getFeaturedPublishedArticle(),
-    dbService.getPublishedArticles({ limit: 7, offset: 0 }),
+    dbService.getPublishedArticles({ limit: 12, offset: 0 }),
     dbService.getActiveCategoriesWithCounts(),
   ]);
 
   if (dbTagline) customTagline = dbTagline;
-  featuredArticle = featured;
   totalArticles = publishedData.total;
-  latestArticles = featured ? publishedData.articles.filter((a: ArticleWithRelations) => a.id !== featured.id) : publishedData.articles;
+  
+  const allArticles: ArticleWithRelations[] = publishedData.articles;
+  
+  if (featured) {
+    featuredArticle = featured;
+    const remaining = allArticles.filter((a) => a.id !== featured.id);
+    secondaryArticles = remaining.slice(0, 3);
+    latestArticles = remaining.slice(3);
+  } else if (allArticles.length > 0) {
+    featuredArticle = allArticles[0];
+    secondaryArticles = allArticles.slice(1, 4);
+    latestArticles = allArticles.slice(4);
+  }
+
   categoriesWithArticles = activeCategories.filter((c: CategoryRecord) => ((c as any).article_count || 0) > 0);
 }
 
@@ -38,41 +51,64 @@ const websiteSchema = generateWebSiteJsonLd();
 <BaseLayout currentPath="/">
   <JsonLd schema={websiteSchema} />
 
-  <!-- Hero Publication Banner -->
-  <section class="hero-section">
-    <div class="container hero-inner">
-      <span class="hero-kicker">Electric Vehicle & Automotive Intelligence</span>
-      <h1 class="hero-title">{SITE_CONFIG.name}</h1>
-      <p class="hero-subtitle">{customTagline}</p>
+  <!-- Homepage Editorial Banner / Ticker Header -->
+  <section class="lead-banner">
+    <div class="container lead-inner">
+      <div class="lead-text">
+        <span class="lead-kicker">Automotive Intelligence & Fleet Technology</span>
+        <h1 class="lead-heading">{SITE_CONFIG.name}</h1>
+        <p class="lead-deck">{customTagline}</p>
+      </div>
+      <div class="lead-meta-pill">
+        <span class="pulse-dot"></span>
+        <span>{totalArticles} Published Dispatches</span>
+      </div>
     </div>
   </section>
 
-  <div class="container main-content-wrapper">
+  <div class="container main-editorial-wrapper">
     {totalArticles === 0 ? (
       <section class="empty-section">
         <EmptyState
-          title="No articles yet."
-          message="Our editorial team is preparing comprehensive automotive dispatches, vehicle architecture reports, and industry analyses."
+          title="No dispatches published yet."
+          message="Our editorial desk is analyzing electric vehicle architectures, battery technology patents, and fleet infrastructure."
         />
       </section>
     ) : (
       <>
-        <!-- Featured Hero Story -->
-        {featuredArticle && (
-          <section class="featured-section" aria-label="Featured Story">
-            <ArticleCard article={featuredArticle} variant="hero" priorityImage={true} />
-          </section>
-        )}
-
-        <!-- Latest Dispatches Grid -->
-        {latestArticles.length > 0 && (
-          <section class="latest-section" aria-label="Latest Dispatches">
-            <div class="section-header">
-              <h2 class="section-title">Latest Dispatches</h2>
-              <span class="section-badge">{totalArticles} Published</span>
+        <!-- 1. Editorial Hero Split: Dominant Story + 3 Secondary Dispatches -->
+        <section class="hero-split-section" aria-label="Featured Stories">
+          <div class="hero-split-grid">
+            <div class="hero-lead-col">
+              {featuredArticle && (
+                <ArticleCard article={featuredArticle} variant="hero" priorityImage={true} />
+              )}
             </div>
 
-            <div class="articles-grid">
+            {secondaryArticles.length > 0 && (
+              <aside class="hero-secondary-col" aria-label="Top Dispatches">
+                <div class="secondary-header">
+                  <span class="secondary-title">Top Intelligence</span>
+                </div>
+                <div class="secondary-list">
+                  {secondaryArticles.map((art) => (
+                    <ArticleCard article={art} variant="compact" />
+                  ))}
+                </div>
+              </aside>
+            )}
+          </div>
+        </section>
+
+        <!-- 2. Latest Chronological Dispatches Grid -->
+        {latestArticles.length > 0 && (
+          <section class="latest-feed-section" aria-label="Latest Dispatches">
+            <div class="section-header">
+              <h2 class="section-title">Latest Dispatches</h2>
+              <a href="/search" class="section-link">View Full Archive &rarr;</a>
+            </div>
+
+            <div class="articles-grid-3col">
               {latestArticles.map((article: ArticleWithRelations) => (
                 <ArticleCard article={article} variant="standard" />
               ))}
@@ -80,35 +116,41 @@ const websiteSchema = generateWebSiteJsonLd();
           </section>
         )}
 
-        <!-- Category Clusters if active -->
+        <!-- 3. Taxonomy Navigation Strip -->
         {categoriesWithArticles.length > 0 && (
-          <section class="category-topics-section">
+          <section class="taxonomy-browse-section">
             <div class="section-header">
-              <h2 class="section-title">Explore by Taxonomy</h2>
+              <h2 class="section-title">Explore by Domain</h2>
             </div>
-            <div class="topics-tags-wrap">
+            <div class="taxonomy-chips-grid">
               {categoriesWithArticles.map((cat: CategoryRecord) => (
-                <a href={`/category/${cat.slug}`} class="topic-chip">
-                  <span class="topic-name">{cat.name}</span>
-                  <span class="topic-count">{(cat as any).article_count}</span>
+                <a href={`/category/${cat.slug}`} class="taxonomy-card">
+                  <div class="tax-card-main">
+                    <span class="tax-name">{cat.name}</span>
+                    <span class="tax-desc">{cat.description || 'View technical dispatches & reports'}</span>
+                  </div>
+                  <div class="tax-meta">
+                    <span class="tax-count">{(cat as any).article_count}</span>
+                    <span class="tax-arrow">&rarr;</span>
+                  </div>
                 </a>
               ))}
             </div>
           </section>
         )}
 
-        <!-- Editorial Dispatch Briefing Box -->
-        <section class="dispatch-briefing">
+        <!-- 4. Editorial Briefing Callout -->
+        <section class="briefing-box">
           <div class="briefing-content">
-            <span class="briefing-kicker">Direct Editorial Inquiries</span>
-            <h3 class="briefing-title">Automotive Research & Dispatch Inquiries</h3>
-            <p class="briefing-text">
-              ECargyan delivers structured technical intelligence for automotive engineers, powertrain analysts, and EV infrastructure planners.
+            <span class="briefing-tag">Editorial Mission</span>
+            <h3 class="briefing-title">Engineering-Grade EV Journalism</h3>
+            <p class="briefing-desc">
+              ECargyan delivers structured technical intelligence for powertrain analysts, automotive engineers, battery researchers, and fleet planners.
             </p>
           </div>
           <div class="briefing-actions">
-            <a href="/about" class="btn btn-primary">About ECargyan</a>
-            <a href="/contact" class="btn btn-secondary">Dispatch Desk &nearr;</a>
+            <a href="/about" class="btn btn-primary">About Our Desk</a>
+            <a href="/contact" class="btn btn-secondary">Contact Editors &nearr;</a>
           </div>
         </section>
       </>
@@ -117,178 +159,281 @@ const websiteSchema = generateWebSiteJsonLd();
 </BaseLayout>
 
 <style>
-  .hero-section {
-    padding: clamp(2rem, 5vw, 3.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
-    border-bottom: 1px solid var(--color-border);
+  .lead-banner {
     background-color: var(--color-surface);
-    text-align: center;
+    border-bottom: 1px solid var(--color-border);
+    padding: clamp(2rem, 4.5vw, 3.25rem) 0 clamp(1.75rem, 3.5vw, 2.5rem);
   }
 
-  .hero-inner {
-    max-width: 800px;
+  .lead-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1.5rem;
   }
 
-  .hero-kicker {
-    font-size: clamp(0.6875rem, 1.8vw, 0.75rem);
-    font-weight: 700;
+  .lead-kicker {
+    font-size: 0.6875rem;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--color-text-muted);
+    color: var(--color-electric-accent);
     display: block;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
   }
 
-  .hero-title {
-    font-size: clamp(2rem, 7vw, 3.75rem);
-    letter-spacing: -0.035em;
-    line-height: 1.1;
-    margin-bottom: 0.75rem;
-    font-weight: 700;
+  .lead-heading {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: var(--color-brand);
+    margin-bottom: 0.5rem;
   }
 
-  .hero-subtitle {
-    font-size: clamp(0.9375rem, 2.5vw, 1.125rem);
-    color: var(--color-text-muted);
+  .lead-deck {
+    font-size: clamp(0.9375rem, 2vw, 1.0625rem);
+    color: var(--color-text-secondary);
+    max-width: 620px;
     line-height: 1.5;
   }
 
-  .main-content-wrapper {
-    padding: clamp(2rem, 4vw, 3.5rem) 1.5rem clamp(3rem, 6vw, 6rem);
-  }
-
-  .featured-section {
-    margin-bottom: clamp(2rem, 4vw, 3.5rem);
-  }
-
-  .latest-section {
-    margin-bottom: clamp(2.5rem, 5vw, 4rem);
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding-bottom: 0.75rem;
-    border-bottom: 2px solid var(--color-brand);
-    margin-bottom: 1.5rem;
-  }
-
-  .section-title {
-    font-size: clamp(1.15rem, 3vw, 1.35rem);
-    font-weight: 700;
-  }
-
-  .section-badge {
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
-    color: var(--color-text-muted);
-  }
-
-  .articles-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .category-topics-section {
-    margin-bottom: clamp(2.5rem, 5vw, 4rem);
-  }
-
-  .topics-tags-wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .topic-chip {
+  .lead-meta-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.4rem 0.85rem;
+    padding: 0.35rem 0.75rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    background-color: var(--color-electric-green);
+    border-radius: 50%;
+  }
+
+  .main-editorial-wrapper {
+    padding: clamp(2rem, 4vw, 3.5rem) 1.5rem clamp(3rem, 6vw, 6rem);
+  }
+
+  /* 1. Hero Split Section */
+  .hero-split-section {
+    margin-bottom: clamp(3rem, 6vw, 4.5rem);
+  }
+
+  .hero-split-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 2rem;
+    align-items: stretch;
+  }
+
+  .hero-lead-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-secondary-col {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .secondary-header {
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 2px solid var(--color-brand);
+  }
+
+  .secondary-title {
     font-size: 0.8125rem;
-    color: var(--color-text-main);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-brand);
   }
 
-  .topic-chip:hover {
-    border-color: var(--color-border-dark);
-    background-color: var(--color-surface-subtle);
+  .secondary-list {
+    display: flex;
+    flex-direction: column;
   }
 
-  .topic-count {
-    font-size: 0.6875rem;
-    font-family: var(--font-mono);
-    color: var(--color-text-dim);
-    background-color: var(--color-surface-subtle);
-    padding: 0.1rem 0.35rem;
-    border-radius: var(--radius-sm);
+  /* 2. Latest Feed Grid */
+  .latest-feed-section {
+    margin-bottom: clamp(3rem, 6vw, 4.5rem);
   }
 
-  .dispatch-briefing {
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: clamp(1.25rem, 3vw, 2.5rem);
+  .articles-grid-3col {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.75rem;
+  }
+
+  /* 3. Taxonomy Section */
+  .taxonomy-browse-section {
+    margin-bottom: clamp(3rem, 6vw, 4.5rem);
+  }
+
+  .taxonomy-chips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+
+  .taxonomy-card {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 1.5rem;
+    padding: 1.15rem 1.25rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    transition: all 0.18s ease;
   }
 
-  .briefing-kicker {
+  .taxonomy-card:hover {
+    border-color: var(--color-electric-accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .tax-card-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .tax-name {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .tax-desc {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .tax-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tax-count {
     font-size: 0.6875rem;
     font-weight: 700;
+    padding: 0.15rem 0.45rem;
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .tax-arrow {
+    font-size: 0.875rem;
+    color: var(--color-electric-accent);
+  }
+
+  /* 4. Briefing Callout Box */
+  .briefing-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--color-brand);
+    color: #ffffff;
+    border-radius: var(--radius-sm);
+    padding: clamp(2rem, 4vw, 3rem);
+    gap: 2rem;
+  }
+
+  .briefing-tag {
+    font-size: 0.6875rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-brand-accent);
+    letter-spacing: 0.12em;
+    color: #38bdf8;
     display: block;
     margin-bottom: 0.5rem;
   }
 
   .briefing-title {
-    font-size: clamp(1.2rem, 3vw, 1.5rem);
+    font-size: clamp(1.35rem, 3vw, 1.85rem);
+    font-weight: 800;
+    color: #ffffff;
     margin-bottom: 0.5rem;
   }
 
-  .briefing-text {
+  .briefing-desc {
+    color: #94a3b8;
     font-size: 0.9375rem;
-    color: var(--color-text-muted);
+    line-height: 1.6;
     max-width: 580px;
-    line-height: 1.5;
   }
 
   .briefing-actions {
     display: flex;
     gap: 0.75rem;
-    flex-shrink: 0;
-    flex-wrap: wrap;
+    white-space: nowrap;
   }
 
-  @media (max-width: 860px) {
-    .dispatch-briefing {
+  .briefing-actions .btn-secondary {
+    background-color: transparent;
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  .briefing-actions .btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: #ffffff;
+  }
+
+  .briefing-actions .btn-primary {
+    background-color: #ffffff;
+    color: var(--color-brand);
+    border-color: #ffffff;
+  }
+
+  .briefing-actions .btn-primary:hover {
+    background-color: #f1f5f9;
+  }
+
+  /* Responsive Rules */
+  @media (max-width: 1024px) {
+    .hero-split-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero-secondary-col {
+      padding: 1.25rem;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .lead-inner {
       flex-direction: column;
       align-items: flex-start;
     }
 
-    .briefing-actions {
-      width: 100%;
+    .briefing-box {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
-    .briefing-actions .btn {
-      flex: 1;
-      text-align: center;
-    }
-
-    .articles-grid {
+    .articles-grid-3col {
       grid-template-columns: 1fr;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .main-content-wrapper {
-      padding: 1.5rem 1rem 3rem;
     }
   }
 </style>

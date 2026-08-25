@@ -1,5 +1,4 @@
 ---
-import { SITE_CONFIG } from '../../lib/config/site';
 import { getDb } from '../../lib/db/client';
 
 interface Props {
@@ -17,43 +16,45 @@ if (dbService) {
 ---
 
 <header class="site-header">
+  <!-- Masthead Top Utility & Brand Bar -->
   <div class="masthead-top">
     <div class="container masthead-inner">
-      <div class="masthead-date">
-        <time datetime={new Date().toISOString()}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+      <div class="masthead-left">
+        <time datetime={new Date().toISOString()} class="masthead-date">
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
         </time>
+        <span class="masthead-divider" aria-hidden="true">|</span>
+        <span class="masthead-edition">EV Intelligence</span>
       </div>
 
       <div class="brand-center">
         <a href="/" class="brand-link" aria-label="ECargyan Home">
-          <span class="brand-title">{SITE_CONFIG.name}</span>
+          <span class="brand-name">ECARGYAN<span class="brand-dot">.</span></span>
         </a>
-        <span class="brand-tagline">{SITE_CONFIG.tagline}</span>
       </div>
 
-      <div class="masthead-actions">
-        <a href="/search" class="action-btn" aria-label="Search articles" title="Search">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <div class="masthead-right">
+        <a href="/search" class="search-trigger-btn" aria-label="Search dispatches">
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <span class="action-text">Search</span>
+          <span class="search-text">Search</span>
         </a>
       </div>
     </div>
   </div>
 
-  <!-- Primary Editorial Nav -->
+  <!-- Primary Editorial Category Nav (Sticky & Touch-Scrollable) -->
   <nav class="primary-nav" aria-label="Editorial Categories">
     <div class="container nav-container">
       <ul class="nav-links">
         <li>
           <a href="/" class:list={['nav-item', { active: currentPath === '/' }]}>
-            Latest Dispatches
+            Latest
           </a>
         </li>
-        {categories.slice(0, 7).map((cat) => (
+        {categories.map((cat) => (
           <li>
             <a
               href={`/category/${cat.slug}`}
@@ -77,11 +78,16 @@ if (dbService) {
   .site-header {
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
   }
 
   .masthead-top {
-    padding: 1.5rem 0 1.25rem;
-    border-bottom: 1px solid var(--color-border);
+    padding: 1.15rem 0 0.85rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+    background-color: var(--color-surface);
   }
 
   .masthead-inner {
@@ -91,66 +97,90 @@ if (dbService) {
     gap: 1rem;
   }
 
-  .masthead-date {
+  .masthead-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     font-size: 0.75rem;
+    font-weight: 500;
     color: var(--color-text-muted);
+  }
+
+  .masthead-date {
     font-family: var(--font-mono);
+  }
+
+  .masthead-divider {
+    color: var(--color-border-dark);
+  }
+
+  .masthead-edition {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    font-size: 0.6875rem;
   }
 
   .brand-center {
     text-align: center;
   }
 
-  .brand-title {
-    font-family: var(--font-serif);
-    font-size: clamp(1.5rem, 5vw, 2.25rem);
-    font-weight: 700;
-    letter-spacing: -0.025em;
+  .brand-link {
+    display: inline-block;
     color: var(--color-brand);
-    display: block;
-    line-height: 1.1;
+    transition: transform 0.15s ease;
   }
 
-  .brand-tagline {
-    font-size: clamp(0.6rem, 2vw, 0.6875rem);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-text-muted);
-    display: block;
-    margin-top: 0.25rem;
+  .brand-link:hover {
+    color: var(--color-brand);
   }
 
-  .masthead-actions {
+  .brand-name {
+    font-family: var(--font-display);
+    font-size: clamp(1.4rem, 3.5vw, 1.85rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--color-brand);
+  }
+
+  .brand-dot {
+    color: var(--color-electric-accent);
+  }
+
+  .masthead-right {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 0.75rem;
   }
 
-  .action-btn {
+  .search-trigger-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.8125rem;
-    color: var(--color-text-muted);
-    padding: 0.4rem 0.75rem;
-    border: 1px solid var(--color-border);
+    padding: 0.35rem 0.75rem;
     border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
     background-color: var(--color-surface-subtle);
-    min-height: 36px;
+    border: 1px solid var(--color-border);
+    transition: all 0.15s ease;
   }
 
-  .action-btn:hover {
-    color: var(--color-text-main);
+  .search-trigger-btn:hover {
+    color: var(--color-brand);
     border-color: var(--color-border-dark);
+    background-color: #ffffff;
   }
 
+  /* Primary Category Nav */
   .primary-nav {
-    padding: 0.5rem 0;
+    background-color: var(--color-surface);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    background-color: var(--color-surface);
   }
 
   .primary-nav::-webkit-scrollbar {
@@ -158,72 +188,86 @@ if (dbService) {
   }
 
   .nav-container {
-    display: flex;
-    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .nav-links {
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 0.25rem;
     white-space: nowrap;
-    padding: 0 0.5rem;
+    padding: 0.25rem 0;
   }
 
   .nav-item {
+    display: inline-block;
+    padding: 0.5rem 0.85rem;
     font-size: 0.8125rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-muted);
-    padding: 0.35rem 0;
-    border-bottom: 2px solid transparent;
-    display: inline-block;
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-xs);
+    position: relative;
+    transition: color 0.15s ease, background-color 0.15s ease;
   }
 
-  .nav-item:hover,
+  .nav-item:hover {
+    color: var(--color-brand);
+    background-color: var(--color-surface-subtle);
+  }
+
   .nav-item.active {
     color: var(--color-brand);
-    border-bottom-color: var(--color-brand);
+    font-weight: 700;
+    background-color: var(--color-surface-subtle);
   }
 
+  .nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0.85rem;
+    right: 0.85rem;
+    height: 2px;
+    background-color: var(--color-brand);
+    border-radius: 1px;
+  }
+
+  /* Mobile Adjustments */
   @media (max-width: 768px) {
     .masthead-top {
-      padding: 1rem 0;
+      padding: 0.75rem 0;
     }
 
     .masthead-inner {
-      grid-template-columns: 1fr auto;
+      grid-template-columns: auto 1fr auto;
       gap: 0.5rem;
     }
 
+    .masthead-edition, .masthead-divider {
+      display: none;
+    }
+
     .masthead-date {
+      font-size: 0.6875rem;
+    }
+
+    .search-text {
       display: none;
     }
 
-    .brand-center {
-      text-align: left;
-    }
-
-    .action-text {
-      display: none;
-    }
-
-    .action-btn {
-      padding: 0.4rem 0.6rem;
-    }
-
-    .nav-container {
-      justify-content: flex-start;
+    .search-trigger-btn {
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
     }
 
     .nav-links {
-      gap: 1rem;
-      padding: 0 0.25rem;
+      gap: 0;
     }
 
     .nav-item {
+      padding: 0.45rem 0.65rem;
       font-size: 0.75rem;
     }
   }

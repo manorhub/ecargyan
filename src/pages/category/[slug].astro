@@ -46,7 +46,7 @@ const breadcrumbSchema = generateBreadcrumbJsonLd(breadcrumbItems);
 
 <BaseLayout
   seo={{
-    title: `${category.name} Dispatches & Intelligence`,
+    title: `${category.name} — EV Intelligence & Dispatches`,
     description: category.description || `Read automotive reports, powertrain benchmarks, and editorial insights classified under ${category.name}.`,
     canonicalUrl,
   }}
@@ -54,108 +54,123 @@ const breadcrumbSchema = generateBreadcrumbJsonLd(breadcrumbItems);
 >
   <JsonLd schema={breadcrumbSchema} />
 
-  <section class="archive-header-section">
+  <!-- Taxonomy Masthead -->
+  <section class="archive-masthead">
     <div class="container">
       <Breadcrumbs items={breadcrumbItems} />
-      <div class="header-inner">
-        <span class="header-kicker">Taxonomy Archive</span>
-        <h1 class="header-title">{category.name}</h1>
+      <div class="archive-header-inner">
+        <span class="archive-kicker">Taxonomy Archive</span>
+        <h1 class="archive-title">{category.name}</h1>
         {category.description && (
-          <p class="header-description">{category.description}</p>
+          <p class="archive-desc">{category.description}</p>
         )}
-        <span class="count-badge">{total} {total === 1 ? 'Published Dispatch' : 'Published Dispatches'}</span>
+        <div class="archive-meta">
+          <span class="count-pill">{total} {total === 1 ? 'Published Dispatch' : 'Published Dispatches'}</span>
+        </div>
       </div>
     </div>
   </section>
 
+  <!-- Category Articles Grid -->
   <main class="container archive-main">
     {total === 0 ? (
       <EmptyState
-        title={`No published articles in ${category.name} yet.`}
-        message="The editorial pipeline has not published dispatches in this category cluster. Reports will appear here once published."
+        title={`No dispatches in ${category.name} yet.`}
+        message="Our editorial desk has not published dispatches in this category cluster. Reports will appear here once published."
         actionText="Return to Latest Dispatches"
         actionHref="/"
       />
     ) : (
       <>
-        <div class="articles-grid">
+        <div class="articles-grid-3col">
           {articles.map((art: ArticleWithRelations) => (
             <ArticleCard article={art} variant="standard" />
           ))}
         </div>
 
-        <Pagination
-          currentPage={page}
-          totalPages={totalPages}
-          baseUrl={`/category/${slug}`}
-        />
+        {totalPages > 1 && (
+          <div class="pagination-wrapper">
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              baseUrl={`/category/${slug}`}
+            />
+          </div>
+        )}
       </>
     )}
   </main>
 </BaseLayout>
 
 <style>
-  .archive-header-section {
-    padding: 3.5rem 0 2.5rem;
+  .archive-masthead {
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
+    padding: clamp(2rem, 4vw, 3.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
   }
 
-  .header-inner {
+  .archive-header-inner {
+    margin-top: 0.75rem;
     max-width: 760px;
   }
 
-  .header-kicker {
-    font-size: 0.75rem;
-    font-weight: 700;
+  .archive-kicker {
+    font-size: 0.6875rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-brand-accent);
+    letter-spacing: 0.12em;
+    color: var(--color-electric-accent);
     display: block;
     margin-bottom: 0.5rem;
   }
 
-  .header-title {
-    font-size: 2.75rem;
-    letter-spacing: -0.025em;
+  .archive-title {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    color: var(--color-brand);
     margin-bottom: 0.75rem;
-    font-weight: 700;
   }
 
-  .header-description {
-    font-size: 1.0625rem;
-    color: var(--color-text-muted);
-    line-height: 1.5;
+  .archive-desc {
+    font-size: clamp(0.9375rem, 2vw, 1.0625rem);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
     margin-bottom: 1.25rem;
   }
 
-  .count-badge {
+  .count-pill {
     display: inline-block;
     font-size: 0.75rem;
-    font-family: var(--font-mono);
-    padding: 0.25rem 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.65rem;
     background-color: var(--color-surface-subtle);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    color: var(--color-text-muted);
+    border-radius: var(--radius-xs);
+    color: var(--color-text-secondary);
   }
 
   .archive-main {
-    padding: 3.5rem 1.5rem 6rem;
+    padding: clamp(2.5rem, 5vw, 4rem) 1.5rem clamp(3rem, 6vw, 6rem);
   }
 
-  .articles-grid {
+  .articles-grid-3col {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 2rem;
+    gap: 1.75rem;
+  }
+
+  .pagination-wrapper {
+    margin-top: 3rem;
+    display: flex;
+    justify-content: center;
   }
 
   @media (max-width: 640px) {
-    .header-title {
-      font-size: 2rem;
-    }
-
-    .articles-grid {
+    .articles-grid-3col {
       grid-template-columns: 1fr;
     }
   }

@@ -77,443 +77,342 @@ const breadcrumbSchema = generateBreadcrumbJsonLd(breadcrumbItems);
   {!isPubliclyAvailable && isAdmin && (
     <div class="draft-notice">
       <div class="container-narrow notice-inner">
-        <span class="badge badge-warning">Unpublished Preview</span>
-        <span>Article Status: <strong>{article.status.toUpperCase()}</strong>. Visible only to authenticated administrators.</span>
+        <span class="badge badge-warning">Admin Preview</span>
+        <span>Article Status: <strong>{article.status.toUpperCase()}</strong>. Visible only to logged in administrators.</span>
         <a href={`/admin/articles/${article.id}/edit`} class="btn btn-secondary btn-xs">Edit Article</a>
       </div>
     </div>
   )}
 
-  <div class="article-page-wrapper">
-    <div class="container-narrow">
-      <Breadcrumbs items={breadcrumbItems} />
+  <article class="article-page-wrapper">
+    <!-- Masthead & Article Header -->
+    <header class="article-masthead">
+      <div class="container-narrow">
+        <Breadcrumbs items={breadcrumbItems} />
 
-      <header class="article-masthead">
-        {article.category && (
-          <a href={`/category/${article.category.slug}`} class="category-kicker">
-            {article.category.name}
-          </a>
-        )}
-        <h1 class="article-headline">{article.title}</h1>
-        {article.excerpt && (
-          <p class="article-lead">{article.excerpt}</p>
-        )}
+        <div class="header-inner">
+          {article.category && (
+            <div class="category-wrapper">
+              <a href={`/category/${article.category.slug}`} class="category-kicker">
+                {article.category.name}
+              </a>
+            </div>
+          )}
 
-        <div class="article-byline-bar">
-          <div class="byline-left">
-            {article.author ? (
-              <div class="author-block">
-                <span class="byline-prefix">Reporting by</span>
-                <a href={`/author/${article.author.slug}`} class="author-link">
-                  {article.author.name}
-                </a>
-              </div>
-            ) : (
-              <div class="author-block">
-                <span class="byline-prefix">Dispatch by</span>
-                <span class="author-name">ECargyan Editorial Desk</span>
-              </div>
-            )}
-          </div>
+          <h1 class="article-headline">{article.title}</h1>
 
-          <div class="byline-right">
-            {formattedPubDate && (
-              <div class="date-block">
-                <span class="byline-prefix">Published</span>
-                <time datetime={new Date(article.published_at || 0).toISOString()}>{formattedPubDate}</time>
+          {article.excerpt && (
+            <p class="article-deck">{article.excerpt}</p>
+          )}
+
+          <!-- Rich Byline Bar -->
+          <div class="byline-bar">
+            <div class="byline-left">
+              {article.author ? (
+                <div class="author-info">
+                  <span class="byline-label">Reporting by</span>
+                  <a href={`/author/${article.author.slug}`} class="author-name">
+                    {article.author.name}
+                  </a>
+                </div>
+              ) : (
+                <div class="author-info">
+                  <span class="byline-label">Dispatch from</span>
+                  <span class="author-name">ECargyan Editorial Staff</span>
+                </div>
+              )}
+            </div>
+
+            <div class="byline-right">
+              {formattedPubDate && (
+                <div class="date-item">
+                  <span class="byline-label">Published</span>
+                  <time datetime={new Date(article.published_at || 0).toISOString()}>{formattedPubDate}</time>
+                </div>
+              )}
+              {article.updated_at && article.published_at && (article.updated_at - article.published_at > 3600000) && (
+                <div class="date-item updated-item">
+                  <span class="byline-label">Updated</span>
+                  <time datetime={new Date(article.updated_at).toISOString()}>{formattedModDate}</time>
+                </div>
+              )}
+              <div class="read-item">
+                <span class="byline-label">Read Time</span>
+                <span class="read-time">{readingTime}</span>
               </div>
-            )}
-            {article.updated_at && article.published_at && (article.updated_at - article.published_at > 3600000) && (
-              <div class="date-block">
-                <span class="byline-prefix">Updated</span>
-                <time datetime={new Date(article.updated_at).toISOString()}>{formattedModDate}</time>
-              </div>
-            )}
-            <div class="read-block">
-              <span class="byline-prefix">Read Time</span>
-              <span class="read-time">{readingTime}</span>
             </div>
           </div>
         </div>
-      </header>
+      </div>
+    </header>
 
-      {article.featured_image && (
-        <figure class="featured-media-container">
+    <!-- Full-Width / Large Featured Hero Image -->
+    {article.featured_image ? (
+      <div class="container hero-media-container">
+        <figure class="hero-figure">
           <img
             src={`/api/media/${article.featured_image.storage_key}`}
             alt={article.featured_image.alt_text || article.title}
-            class="article-featured-image"
-            fetchpriority="high"
+            class="hero-img"
             loading="eager"
+            fetchpriority="high"
           />
           {article.featured_image.caption && (
-            <figcaption class="image-caption">{article.featured_image.caption}</figcaption>
+            <figcaption class="hero-caption">
+              {article.featured_image.caption}
+            </figcaption>
           )}
         </figure>
-      )}
+      </div>
+    ) : (
+      <div class="container-narrow hero-divider-wrap">
+        <hr class="hero-divider" />
+      </div>
+    )}
 
-      <!-- Article Prose Body -->
-      <div class="article-body prose" set:html={contentHtml} />
+    <!-- Editorial Article Body (~720px optimal reading column) -->
+    <div class="container-narrow article-body-container">
+      <div class="article-prose" set:html={contentHtml} />
 
-      <!-- Tags Cloud -->
+      <!-- Article Tags -->
       {article.tags && article.tags.length > 0 && (
-        <footer class="article-tags-footer">
-          <span class="tags-header">Classified Topics</span>
+        <div class="article-tags-wrap">
+          <span class="tags-label">Classifications:</span>
           <div class="tags-list">
-            {article.tags.map((t) => (
-              <a href={`/tag/${t.slug}`} class="tag-badge">#{t.name}</a>
+            {article.tags.map((tag) => (
+              <span class="tag-chip">#{tag.name}</span>
             ))}
           </div>
-        </footer>
-      )}
-
-      <!-- Author Bio Box -->
-      {article.author && (
-        <section class="author-bio-card">
-          <div class="author-bio-info">
-            <span class="bio-kicker">About the Contributor</span>
-            <h3 class="bio-author-name">
-              <a href={`/author/${article.author.slug}`}>{article.author.name}</a>
-            </h3>
-            {article.author.bio && (
-              <p class="bio-text">{article.author.bio}</p>
-            )}
-          </div>
-        </section>
+        </div>
       )}
     </div>
 
-    <!-- Related Articles Section -->
+    <!-- Related Editorial Dispatches -->
     {relatedArticles.length > 0 && (
-      <section class="related-section">
+      <section class="related-dispatches-section">
         <div class="container">
-          <div class="related-header">
-            <h2 class="related-title">Related Dispatches</h2>
-            <span class="related-tagline">More analysis from ECargyan editorial</span>
+          <div class="section-header">
+            <h2 class="section-title">Related Dispatches</h2>
+            {article.category && (
+              <a href={`/category/${article.category.slug}`} class="section-link">
+                More in {article.category.name} &rarr;
+              </a>
+            )}
           </div>
 
           <div class="related-grid">
-            {relatedArticles.map((rel) => (
-              <ArticleCard article={rel} variant="standard" />
+            {relatedArticles.map((relArt) => (
+              <ArticleCard article={relArt} variant="standard" />
             ))}
           </div>
         </div>
       </section>
     )}
-  </div>
+  </article>
 </BaseLayout>
 
 <style>
   .draft-notice {
-    background-color: var(--color-surface);
-    border-bottom: 2px solid var(--color-warning);
-    padding: 0.75rem 0;
+    background-color: #fffbeb;
+    border-bottom: 1px solid #fde68a;
+    padding: 0.65rem 0;
     font-size: 0.8125rem;
   }
 
   .notice-inner {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     gap: 1rem;
   }
 
-  .article-page-wrapper {
-    padding: 3rem 0 6rem;
-  }
-
-  .article-masthead {
-    margin-bottom: 2.5rem;
-  }
-
-  .category-kicker {
-    display: inline-block;
+  .btn-xs {
+    padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-brand-accent);
-    margin-bottom: 1rem;
   }
 
-  .category-kicker:hover {
-    text-decoration: underline;
+  /* Article Masthead */
+  .article-masthead {
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: clamp(2rem, 4vw, 3.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
+  }
+
+  .category-wrapper {
+    margin-bottom: 0.75rem;
   }
 
   .article-headline {
-    font-size: clamp(1.75rem, 5.5vw, 3.25rem);
-    letter-spacing: -0.03em;
-    line-height: 1.15;
-    margin-bottom: 1.25rem;
-    font-weight: 700;
+    font-size: clamp(2rem, 4.8vw, 3.25rem);
+    line-height: 1.12;
+    letter-spacing: -0.035em;
+    color: var(--color-brand);
+    margin-bottom: 1rem;
   }
 
-  .article-lead {
-    font-family: var(--font-serif);
-    font-size: clamp(1.05rem, 2.8vw, 1.25rem);
-    color: var(--color-text-muted);
+  .article-deck {
+    font-size: clamp(1.0625rem, 2.2vw, 1.25rem);
+    color: var(--color-text-secondary);
     line-height: 1.55;
-    margin-bottom: clamp(1.25rem, 3vw, 2rem);
+    margin-bottom: 1.75rem;
   }
 
-  .article-byline-bar {
+  .byline-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 0;
+    padding-top: 1.25rem;
     border-top: 1px solid var(--color-border);
-    border-bottom: 1px solid var(--color-border);
-    font-size: 0.875rem;
-    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
     gap: 1rem;
-  }
-
-  .byline-left, .byline-right {
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
     flex-wrap: wrap;
   }
 
-  .byline-prefix {
-    display: block;
+  .byline-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .byline-label {
     font-size: 0.6875rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--color-text-dim);
-    margin-bottom: 0.15rem;
+    color: var(--color-text-muted);
+    display: block;
   }
 
-  .author-link, .author-name {
-    font-weight: 600;
+  .author-name {
+    font-weight: 700;
     color: var(--color-text-main);
   }
 
-  .author-link:hover {
-    text-decoration: underline;
+  .author-name:hover {
+    color: var(--color-electric-accent);
   }
 
-  .featured-media-container {
-    margin: clamp(1.5rem, 4vw, 2.5rem) 0 clamp(2rem, 5vw, 3.5rem);
+  .byline-right {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
   }
 
-  .article-featured-image {
+  .date-item, .read-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .date-item time, .read-time {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+  }
+
+  /* Hero Media Container */
+  .hero-media-container {
+    max-width: 1080px;
+    margin: clamp(2rem, 4vw, 3rem) auto;
+  }
+
+  .hero-figure {
+    position: relative;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background-color: var(--color-brand);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .hero-img {
     width: 100%;
-    border-radius: var(--radius-md);
-    max-height: 520px;
     aspect-ratio: 16 / 9;
     object-fit: cover;
+    object-position: center;
     display: block;
   }
 
-  .image-caption {
+  .hero-caption {
+    padding: 0.65rem 1rem;
     font-size: 0.75rem;
     color: var(--color-text-muted);
-    margin-top: 0.5rem;
-    text-align: center;
-    font-style: italic;
+    background-color: var(--color-surface);
+    border-top: 1px solid var(--color-border);
   }
 
-  .prose {
-    font-size: clamp(1rem, 2.5vw, 1.125rem);
-    line-height: 1.8;
-    color: var(--color-text-main);
+  .hero-divider-wrap {
+    margin: 2rem auto;
   }
 
-  .prose :global(h2) {
-    font-size: clamp(1.4rem, 4vw, 1.875rem);
-    margin: clamp(2rem, 4vw, 3rem) 0 1rem;
-    letter-spacing: -0.02em;
-  }
-
-  .prose :global(h3) {
-    font-size: clamp(1.2rem, 3vw, 1.375rem);
-    margin: clamp(1.5rem, 3vw, 2.25rem) 0 0.75rem;
-    letter-spacing: -0.015em;
-  }
-
-  .prose :global(p) {
-    margin-bottom: 1.5rem;
-  }
-
-  .prose :global(ul), .prose :global(ol) {
-    margin-bottom: 1.5rem;
-    padding-left: 1.5rem;
-  }
-
-  .prose :global(li) {
-    margin-bottom: 0.5rem;
-  }
-
-  .prose :global(blockquote) {
-    border-left: 3px solid var(--color-brand);
-    padding-left: 1.25rem;
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: clamp(1.05rem, 2.5vw, 1.1875rem);
-    color: var(--color-text-muted);
-    margin: 2rem 0;
-  }
-
-  .prose :global(hr) {
+  .hero-divider {
     border: none;
     border-top: 1px solid var(--color-border);
-    margin: 2.5rem 0;
   }
 
-  .prose :global(pre) {
-    background-color: var(--color-brand);
-    color: #ffffff;
-    padding: 1rem;
-    border-radius: var(--radius-sm);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin-bottom: 1.5rem;
-    font-size: 0.8125rem;
-    max-width: 100%;
+  /* Article Reading Body */
+  .article-body-container {
+    padding-bottom: clamp(3rem, 6vw, 5rem);
   }
 
-  .prose :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.875em;
-    background-color: var(--color-surface-subtle);
-    padding: 0.15rem 0.35rem;
-    border-radius: var(--radius-sm);
-    word-break: break-word;
-  }
-
-  .prose :global(table) {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .prose :global(th), .prose :global(td) {
-    padding: 0.6rem 0.75rem;
-    border: 1px solid var(--color-border);
-    font-size: 0.875rem;
-  }
-
-  .prose :global(th) {
-    background-color: var(--color-surface-subtle);
-    font-weight: 600;
-  }
-
-  .article-tags-footer {
+  .article-tags-wrap {
     margin-top: 3rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
-  .tags-header {
+  .tags-label {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--color-text-dim);
-    display: block;
-    margin-bottom: 0.75rem;
+    color: var(--color-text-muted);
   }
 
   .tags-list {
     display: flex;
+    gap: 0.4rem;
     flex-wrap: wrap;
-    gap: 0.5rem;
   }
 
-  .tag-badge {
+  .tag-chip {
     font-size: 0.75rem;
-    font-family: var(--font-mono);
-    background-color: var(--color-surface);
-    border: 1px solid var(--color-border);
-    padding: 0.25rem 0.65rem;
-    border-radius: var(--radius-sm);
-    color: var(--color-text-main);
-  }
-
-  .tag-badge:hover {
-    border-color: var(--color-border-dark);
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-xs);
     background-color: var(--color-surface-subtle);
-  }
-
-  .author-bio-card {
-    margin-top: 3rem;
-    background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: clamp(1.25rem, 3vw, 2rem);
+    color: var(--color-text-secondary);
   }
 
-  .bio-kicker {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-text-dim);
-    display: block;
-    margin-bottom: 0.35rem;
-  }
-
-  .bio-author-name {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-  }
-
-  .bio-author-name a {
-    color: var(--color-text-main);
-  }
-
-  .bio-text {
-    font-size: 0.9375rem;
-    color: var(--color-text-muted);
-    line-height: 1.5;
-  }
-
-  .related-section {
-    margin-top: 4rem;
-    padding-top: 3rem;
-    border-top: 2px solid var(--color-border);
-  }
-
-  .related-header {
-    margin-bottom: 1.5rem;
-  }
-
-  .related-title {
-    font-size: clamp(1.25rem, 3vw, 1.5rem);
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-  }
-
-  .related-tagline {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
+  /* Related Dispatches Section */
+  .related-dispatches-section {
+    background-color: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding: clamp(3rem, 5vw, 4.5rem) 0;
   }
 
   .related-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.75rem;
   }
 
-  .btn-xs {
-    padding: 0.2rem 0.5rem;
-    font-size: 0.75rem;
-  }
-
-  @media (max-width: 680px) {
-    .article-byline-bar {
+  @media (max-width: 768px) {
+    .byline-bar {
       flex-direction: column;
       align-items: flex-start;
-      gap: 0.75rem;
+      gap: 1rem;
     }
 
-    .byline-left, .byline-right {
+    .byline-right {
       gap: 1rem;
+      flex-wrap: wrap;
     }
 
     .related-grid {
