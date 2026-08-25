@@ -78,45 +78,70 @@ const navGroups: NavGroup[] = [
 ];
 ---
 
-<aside class="admin-sidebar" aria-label="Admin Navigation">
+<aside class="admin-sidebar" aria-label="Admin Navigation" id="admin-sidebar">
   <div class="sidebar-brand">
     <a href="/" class="brand-link" title="Return to Public Site">
       <span class="brand-name">ECargyan</span>
       <span class="brand-env">Admin</span>
     </a>
+    <button type="button" class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Admin Menu">
+      <span class="toggle-icon-open">&#9776; Menu</span>
+      <span class="toggle-icon-close" style="display: none;">&times; Close</span>
+    </button>
   </div>
 
-  <nav class="sidebar-nav">
-    {navGroups.map((group) => (
-      <div class="nav-section">
-        <div class="nav-section-title">{group.title}</div>
-        <ul class="nav-list">
-          {group.items.map((item) => {
-            const isActive = currentPath === item.href || (item.href !== '/admin' && currentPath.startsWith(item.href) && (item.href.split('/').length > 2 || currentPath === item.href));
-            return (
-              <li class="nav-item">
-                <a href={item.href} class:list={['nav-link', { active: isActive }]}>
-                  <span class="nav-label">{item.name}</span>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    ))}
-  </nav>
+  <div class="sidebar-collapsible" id="sidebar-collapsible">
+    <nav class="sidebar-nav">
+      {navGroups.map((group) => (
+        <div class="nav-section">
+          <div class="nav-section-title">{group.title}</div>
+          <ul class="nav-list">
+            {group.items.map((item) => {
+              const isActive = currentPath === item.href || (item.href !== '/admin' && currentPath.startsWith(item.href) && (item.href.split('/').length > 2 || currentPath === item.href));
+              return (
+                <li class="nav-item">
+                  <a href={item.href} class:list={['nav-link', { active: isActive }]}>
+                    <span class="nav-label">{item.name}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
 
-  <div class="sidebar-footer">
-    <div class="user-badge">
-      <span class="user-role">ADMIN</span>
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <span class="user-role">ADMIN</span>
+      </div>
+      <form action="/admin/logout" method="POST" class="logout-form">
+        <button type="submit" class="logout-button" title="Sign out of administration">
+          Sign out
+        </button>
+      </form>
     </div>
-    <form action="/admin/logout" method="POST" class="logout-form">
-      <button type="submit" class="logout-button" title="Sign out of administration">
-        Sign out
-      </button>
-    </form>
   </div>
 </aside>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('mobile-nav-toggle');
+    const collapsible = document.getElementById('sidebar-collapsible');
+    if (!toggle || !collapsible) return;
+
+    const iconOpen = toggle.querySelector('.toggle-icon-open');
+    const iconClose = toggle.querySelector('.toggle-icon-close');
+
+    toggle.addEventListener('click', () => {
+      const isOpen = collapsible.classList.toggle('is-open');
+      if (iconOpen && iconClose) {
+        iconOpen.style.display = isOpen ? 'none' : 'inline';
+        iconClose.style.display = isOpen ? 'inline' : 'none';
+      }
+    });
+  });
+</script>
 
 <style>
   .admin-sidebar {
@@ -130,11 +155,15 @@ const navGroups: NavGroup[] = [
     position: sticky;
     top: 0;
     overflow-y: auto;
+    z-index: 50;
   }
 
   .sidebar-brand {
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .brand-link {
@@ -159,6 +188,24 @@ const navGroups: NavGroup[] = [
     border: 1px solid var(--color-border);
     padding: 0.1rem 0.35rem;
     border-radius: var(--radius-sm);
+  }
+
+  .mobile-nav-toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    cursor: pointer;
+  }
+
+  .sidebar-collapsible {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
   }
 
   .sidebar-nav {
@@ -197,13 +244,14 @@ const navGroups: NavGroup[] = [
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.4rem 0.75rem;
+    padding: 0.45rem 0.75rem;
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
     text-decoration: none;
     font-size: 0.8125rem;
     font-weight: 500;
     transition: all 0.15s ease;
+    min-height: 36px;
   }
 
   .nav-link:hover {
@@ -254,6 +302,22 @@ const navGroups: NavGroup[] = [
       position: static;
       border-right: none;
       border-bottom: 1px solid var(--color-border);
+    }
+
+    .mobile-nav-toggle {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .sidebar-collapsible {
+      display: none;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .sidebar-collapsible.is-open {
+      display: flex;
     }
   }
 </style>

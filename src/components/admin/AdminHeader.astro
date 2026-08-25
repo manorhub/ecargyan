@@ -103,10 +103,53 @@ const { userEmail = 'Admin', userRole = 'Administrator' } = Astro.props;
   .user-email {
     color: var(--color-text-main);
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
   }
 
   .btn-sm {
-    padding: 0.25rem 0.625rem;
+    padding: 0.35rem 0.625rem;
     font-size: 0.75rem;
+    min-height: 32px;
+  }
+
+  @media (max-width: 860px) {
+    .admin-search-input {
+      width: 180px;
+    }
+
+    .header-link {
+      display: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .admin-topbar {
+      padding: 0.5rem 1rem;
+    }
+
+    .topbar-inner {
+      flex-direction: row;
+      gap: 0.5rem;
+    }
+
+    .admin-search-form {
+      flex: 1;
+    }
+
+    .admin-search-input {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .user-info {
+      display: none;
+    }
+
+    .logout-form {
+      display: none; /* Accessible via mobile nav drawer */
+    }
   }
 </style>
