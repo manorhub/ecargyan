@@ -78,6 +78,13 @@ const freshness = calculateFreshness(item.first_seen_at);
           <button type="submit" class="btn btn-primary">Restore to Ready</button>
         </form>
       )}
+      <form action="/admin/research/delete" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this research record and its associated facts?');">
+        <input type="hidden" name="id" value={item.id} />
+        <input type="hidden" name="return_to" value="/admin/research" />
+        <button type="submit" class="btn btn-danger" style="background-color: #ef4444; border-color: #dc2626; color: #fff;">
+          Delete Record
+        </button>
+      </form>
     </div>
   </div>
 

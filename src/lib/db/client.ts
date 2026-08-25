@@ -1750,6 +1750,18 @@ export class DatabaseService {
     }
   }
 
+  async deleteResearchItem(id: string): Promise<boolean> {
+    try {
+      await this.db.prepare('DELETE FROM research_facts WHERE research_item_id = ?').bind(id).run();
+      await this.db.prepare('DELETE FROM research_sources WHERE research_item_id = ?').bind(id).run();
+      await this.db.prepare('DELETE FROM research_items WHERE id = ?').bind(id).run();
+      return true;
+    } catch (error) {
+      logError(`Failed to delete research item ${id}`, error);
+      return false;
+    }
+  }
+
   async updateResearchTopic(id: string, topicId: string | null): Promise<void> {
     const now = Date.now();
     try {

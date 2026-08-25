@@ -152,14 +152,14 @@ function getFreshnessClass(freshness: string): string {
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Research Headline</th>
-              <th>Type</th>
-              <th>Topic</th>
-              <th>Sources</th>
-              <th>Score</th>
-              <th>Freshness</th>
-              <th>Updated</th>
-              <th class="text-right">Action</th>
+              <th class="col-headline">Research Headline</th>
+              <th class="col-type">Type</th>
+              <th class="col-topic">Topic</th>
+              <th class="col-sources">Sources</th>
+              <th class="col-score">Score</th>
+              <th class="col-freshness">Freshness</th>
+              <th class="col-updated">Updated</th>
+              <th class="col-actions text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -167,7 +167,7 @@ function getFreshnessClass(freshness: string): string {
               const freshness = calculateFreshness(item.first_seen_at);
               return (
                 <tr>
-                  <td>
+                  <td class="col-headline">
                     <a href={`/admin/research/${item.id}`} class="research-title-link">
                       {item.title}
                     </a>
@@ -175,35 +175,35 @@ function getFreshnessClass(freshness: string): string {
                       <span class="research-summary-hint">{item.summary}</span>
                     )}
                   </td>
-                  <td>
+                  <td class="col-type">
                     <span class="type-pill">{item.content_type.toUpperCase()}</span>
                   </td>
-                  <td>
+                  <td class="col-topic">
                     {item.topic_name ? (
                       <span class="topic-badge">{item.topic_name}</span>
                     ) : (
                       <span class="text-muted">—</span>
                     )}
                   </td>
-                  <td>
+                  <td class="col-sources">
                     <span class:list={['sources-pill', { 'multi-source': item.source_count > 1 }]}>
                       {item.source_count} {item.source_count === 1 ? 'source' : 'sources'}
                     </span>
                   </td>
-                  <td>
+                  <td class="col-score">
                     <span class:list={['badge', getImportanceClass(item.importance)]}>
                       {item.importance} / 100
                     </span>
                   </td>
-                  <td>
+                  <td class="col-freshness">
                     <span class:list={['badge', getFreshnessClass(freshness)]}>
                       {freshness.toUpperCase()}
                     </span>
                   </td>
-                  <td>
+                  <td class="col-updated">
                     <span class="date-text">{formatDate(item.last_updated_at)}</span>
                   </td>
-                  <td class="text-right">
+                  <td class="col-actions text-right">
                     <div class="actions-group">
                       <a href={`/admin/research/${item.id}`} class="btn btn-secondary btn-xs">
                         Inspect
@@ -212,7 +212,7 @@ function getFreshnessClass(freshness: string): string {
                         <form action="/admin/research/ignore" method="POST" style="display:inline;">
                           <input type="hidden" name="id" value={item.id} />
                           <input type="hidden" name="status" value="ignored" />
-                          <input type="hidden" name="return_to" value="/admin/research" />
+                          <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
                           <button type="submit" class="btn btn-secondary btn-xs" title="Mark Ignored">
                             Ignore
                           </button>
@@ -221,12 +221,19 @@ function getFreshnessClass(freshness: string): string {
                         <form action="/admin/research/ignore" method="POST" style="display:inline;">
                           <input type="hidden" name="id" value={item.id} />
                           <input type="hidden" name="status" value="ready" />
-                          <input type="hidden" name="return_to" value="/admin/research" />
+                          <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
                           <button type="submit" class="btn btn-secondary btn-xs" title="Restore to Ready">
                             Restore
                           </button>
                         </form>
                       )}
+                      <form action="/admin/research/delete" method="POST" style="display:inline;" onsubmit="return confirm('Permanently delete this research record and its associated facts?');">
+                        <input type="hidden" name="id" value={item.id} />
+                        <input type="hidden" name="return_to" value={`/admin/research?page=${page}&status=${statusFilter}&type=${typeFilter}&topic=${topicFilter}&q=${search}`} />
+                        <button type="submit" class="btn btn-danger btn-xs" title="Permanently Delete">
+                          Delete
+                        </button>
+                      </form>
                     </div>
                   </td>
                 </tr>
@@ -320,13 +327,14 @@ function getFreshnessClass(freshness: string): string {
 
   .admin-table {
     width: 100%;
+    min-width: 920px;
     border-collapse: collapse;
     font-size: 0.875rem;
   }
 
   .admin-table th {
     text-align: left;
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1rem;
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -334,13 +342,23 @@ function getFreshnessClass(freshness: string): string {
     color: var(--color-text-muted);
     background-color: var(--color-surface-subtle);
     border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
   }
 
   .admin-table td {
-    padding: 1rem 1.5rem;
+    padding: 0.875rem 1rem;
     border-bottom: 1px solid var(--color-border);
     vertical-align: middle;
   }
+
+  .col-headline { min-width: 260px; }
+  .col-type { width: 85px; white-space: nowrap; }
+  .col-topic { width: 110px; white-space: nowrap; }
+  .col-sources { width: 95px; white-space: nowrap; }
+  .col-score { width: 85px; white-space: nowrap; }
+  .col-freshness { width: 95px; white-space: nowrap; }
+  .col-updated { width: 110px; white-space: nowrap; }
+  .col-actions { width: 180px; min-width: 180px; white-space: nowrap; }
 
   .research-title-link {
     font-weight: 600;
@@ -371,12 +389,15 @@ function getFreshnessClass(freshness: string): string {
     background-color: var(--color-surface-subtle);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
+    white-space: nowrap;
+    display: inline-block;
   }
 
   .topic-badge {
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--color-brand-accent);
+    white-space: nowrap;
   }
 
   .sources-pill {
@@ -387,6 +408,8 @@ function getFreshnessClass(freshness: string): string {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     color: var(--color-text-muted);
+    white-space: nowrap;
+    display: inline-block;
   }
 
   .sources-pill.multi-source {
@@ -399,6 +422,7 @@ function getFreshnessClass(freshness: string): string {
   .date-text {
     font-size: 0.8125rem;
     color: var(--color-text-muted);
+    white-space: nowrap;
   }
 
   .text-muted {
@@ -413,16 +437,29 @@ function getFreshnessClass(freshness: string): string {
     display: inline-flex;
     gap: 0.35rem;
     align-items: center;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+  }
+
+  .actions-group .btn {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .btn-sm {
     padding: 0.35rem 0.75rem;
     font-size: 0.8125rem;
+    white-space: nowrap;
   }
 
   .btn-xs {
-    padding: 0.2rem 0.5rem;
+    padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 
   .empty-box {
