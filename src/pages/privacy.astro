@@ -1,52 +1,245 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+import { getDb } from '../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let contactEmail = 'editorial@ecargyan.com';
+let effectiveDate = 'August 25, 2026';
+let lastUpdatedDate = 'August 25, 2026';
+
+if (dbService) {
+  const [dbEmail, dbEffDate, dbUpdDate] = await Promise.all([
+    dbService.getSetting('contact_email'),
+    dbService.getSetting('privacy_effective_date'),
+    dbService.getSetting('privacy_last_updated'),
+  ]);
+  if (dbEmail) contactEmail = dbEmail;
+  if (dbEffDate) effectiveDate = dbEffDate;
+  if (dbUpdDate) lastUpdatedDate = dbUpdDate;
+}
 
 const canonicalUrl = getCanonicalUrl('/privacy');
 ---
 
 <BaseLayout
   seo={{
-    title: 'Privacy Policy',
-    description: 'Privacy policy and data governance practices of ECargyan.',
+    title: `Privacy Policy | ${SITE_CONFIG.name}`,
+    description: `Privacy policy and transparent data governance practices for ${SITE_CONFIG.name}.`,
     canonicalUrl,
   }}
   currentPath="/privacy"
 >
   <header class="static-header">
     <div class="container-narrow">
-      <span class="static-kicker">Governance</span>
+      <span class="static-kicker">Governance & Transparency</span>
       <h1 class="static-title">Privacy Policy</h1>
-      <p class="static-subhead">Effective Date: January 1, 2026</p>
+      <p class="static-subhead">
+        Effective Date: {effectiveDate} &bull; Last Updated: {lastUpdatedDate}
+      </p>
     </div>
   </header>
 
-  <main class="container-narrow static-content prose">
-    <h2>1. Overview</h2>
-    <p>
-      {SITE_CONFIG.name} is dedicated to respecting and protecting the privacy of its readers and contributors. This policy outlines how information is handled when visiting our website.
-    </p>
+  <main class="container-narrow static-content">
+    <article class="prose-content">
+      <section class="policy-section">
+        <h2>1. Introduction</h2>
+        <p>
+          Welcome to <strong>{SITE_CONFIG.name}</strong> (accessible at <a href={SITE_CONFIG.url}>{SITE_CONFIG.url.replace('https://', '')}</a>, referred to as &ldquo;{SITE_CONFIG.name}&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;). We publish independent technical analysis, powertrain benchmarks, and industry intelligence on electric mobility and automotive engineering.
+        </p>
+        <p>
+          We are committed to operating transparently and respecting the privacy of our readers. This Privacy Policy explains what information is collected, how it is processed, and our actual data handling practices across our website and edge infrastructure.
+        </p>
+      </section>
 
-    <h2>2. Information Collection</h2>
-    <p>
-      We do not require user account registration for public readers. Standard server log data (such as IP addresses, browser types, and access timestamps) is processed solely for network diagnostic, security, and edge performance purposes via Cloudflare.
-    </p>
+      <section class="policy-section">
+        <h2>2. Information We Collect</h2>
+        <p>
+          We deliberately minimize data collection. We do not operate public user registration, reader profile systems, paywalls, or customer payment gateways.
+        </p>
+        
+        <h3>A. Information Provided Voluntarily</h3>
+        <ul>
+          <li>
+            <strong>Editorial Correspondence:</strong> If you contact our dispatch desk via email, we receive your email address, name (if provided), and the contents of your message. This correspondence is used exclusively to evaluate editorial tips, address factual correction requests, or collaborate on automotive research.
+          </li>
+        </ul>
 
-    <h2>3. Cookies & Local Storage</h2>
-    <p>
-      We only use strictly necessary session cookies for authenticated administrators accessing the editorial control panel. We do not deploy third-party advertising tracking cookies or biometric user tracking scripts.
-    </p>
+        <h3>B. Information Processed Automatically by Edge Infrastructure</h3>
+        <ul>
+          <li>
+            <strong>Network Transmission & Security Data:</strong> When you request a page on {SITE_CONFIG.name}, your browser transmits standard HTTP metadata (such as IP address, User-Agent header, operating system type, referring URL, and request timestamps). This information is processed in-transit by Cloudflare edge servers solely for delivering requested web pages, routing edge traffic, mitigating malicious bot attacks, and preventing Distributed Denial of Service (DDoS) attempts.
+          </li>
+        </ul>
 
-    <h2>4. Changes to Policy</h2>
-    <p>
-      Any updates to our data governance practices will be published directly on this page with a revised effective date.
-    </p>
+        <h3>C. Administrative Account Credentials</h3>
+        <ul>
+          <li>
+            <strong>Authorized Staff Only:</strong> For authorized editorial personnel who log in to the content management system, we maintain administrative credentials (email address, securely hashed passwords using PBKDF2/SHA-256, and operational audit logs) in our private database to safeguard publishing controls.
+          </li>
+        </ul>
+      </section>
+
+      <section class="policy-section">
+        <h2>3. Cookies and Storage Technologies</h2>
+        <p>
+          {SITE_CONFIG.name} does <strong>not</strong> use advertising cookies, cross-site tracking cookies, or commercial user profiling beacons.
+        </p>
+        <ul>
+          <li>
+            <strong>Public Visitors:</strong> Browsing public articles on {SITE_CONFIG.name} requires zero cookies. We do not set persistent tracking cookies or store reader profiles in your browser&rsquo;s <code>localStorage</code> or <code>IndexedDB</code>.
+          </li>
+          <li>
+            <strong>Administrative Sessions:</strong> When an authorized administrator logs into the editorial panel, a single signed, strictly necessary authentication session cookie (<code>ecargyan_session</code>) is issued. This cookie is marked <code>HttpOnly</code>, <code>SameSite=Lax</code>, and encrypted in transit over HTTPS.
+          </li>
+        </ul>
+      </section>
+
+      <section class="policy-section">
+        <h2>4. Analytics and Measurement</h2>
+        <p>
+          We do not deploy client-side third-party analytics trackers (such as Google Analytics, tracking pixels, or session replay scripts) on public pages.
+        </p>
+        <p>
+          We utilize webmaster indexing tools (such as Google Search Console) to verify website discovery and sitemap health. These webmaster tools monitor search engine crawl status and aggregated search visibility; they do not collect or report individualized personal information from website visitors.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>5. Artificial Intelligence (DeepSeek API)</h2>
+        <p>
+          Our editorial team utilizes server-side AI tools (DeepSeek API) to assist in organizing structured technical research gathered from public manufacturer specifications, engineering whitepapers, and verified automotive wire feeds.
+        </p>
+        <div class="highlight-callout">
+          <strong>Visitor Privacy Guarantee:</strong>
+          <p>
+            No reader personal information, email correspondence, or visitor network telemetry is ever transmitted to or processed by the DeepSeek API. DeepSeek processes only editorial reference material and prompt templates server-side.
+          </p>
+        </div>
+      </section>
+
+      <section class="policy-section">
+        <h2>6. Third-Party Infrastructure & Data Processors</h2>
+        <p>
+          To deliver fast, secure edge performance globally, we rely on trusted infrastructure providers:
+        </p>
+        <div class="service-table-wrapper">
+          <table class="service-table">
+            <thead>
+              <tr>
+                <th>Service Provider</th>
+                <th>Role / Infrastructure Purpose</th>
+                <th>Privacy Information</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Cloudflare, Inc.</strong></td>
+                <td>Edge compute (Workers), database (D1), media storage (R2), and DDoS/DNS protection.</td>
+                <td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare Privacy Policy &nearr;</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-subtext">
+          We do not share, rent, or sell visitor information to third-party data brokers, marketing networks, or behavioral advertisers.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>7. Media and Image Hosting</h2>
+        <p>
+          Article illustrations, technical diagrams, and editorial assets are stored securely on Cloudflare R2 object storage and delivered via edge routing. Public readers cannot upload media to the platform.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>8. Data Retention</h2>
+        <ul>
+          <li>
+            <strong>Visitor Server Logs:</strong> Edge request logs handled by Cloudflare are retained temporarily for security auditing and diagnostic purposes according to standard network retention cycles.
+          </li>
+          <li>
+            <strong>Editorial Inquiries:</strong> Inquiries sent via email are retained only as long as necessary to address the correspondence or maintain editorial records of verified corrections.
+          </li>
+          <li>
+            <strong>Administrative Records:</strong> Audit logs and revision histories associated with content publication are retained to preserve editorial provenance.
+          </li>
+        </ul>
+      </section>
+
+      <section class="policy-section">
+        <h2>9. Information Security</h2>
+        <p>
+          We employ technical and organizational safeguards designed to protect data integrity:
+        </p>
+        <ul>
+          <li>Strict TLS/HTTPS encryption across all public and administrative endpoints.</li>
+          <li>Server-side secret management with zero exposure of API credentials to client browsers.</li>
+          <li>Edge-level Server-Side Request Forgery (SSRF) protections blocking internal IP access.</li>
+          <li>Cryptographically signed session tokens and PBKDF2 password hashing for administrative access.</li>
+        </ul>
+        <p>
+          While we maintain rigorous security standards, no method of transmission or electronic storage over the Internet can be guaranteed 100% secure.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>10. International Data Transfers</h2>
+        <p>
+          Because our platform operates on Cloudflare&rsquo;s global edge network, technical request metadata may be processed by edge servers located in countries other than your country of residence. Data transfers are conducted in compliance with applicable international transfer frameworks supported by our infrastructure providers.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>11. Children&rsquo;s Privacy</h2>
+        <p>
+          {SITE_CONFIG.name} provides professional automotive engineering analysis and is not directed to children under the age of 13 (or under 16 where applicable by law). We do not knowingly collect personal data from children.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>12. Your Privacy Rights</h2>
+        <p>
+          Depending on your location and applicable privacy legislation (such as the Digital Personal Data Protection Act in India, the General Data Protection Regulation in the European Economic Area, or the California Consumer Privacy Act in the United States), you may have rights regarding your personal information, including:
+        </p>
+        <ul>
+          <li>The right to request access to any personal correspondence we hold about you.</li>
+          <li>The right to request correction or deletion of your contact data.</li>
+          <li>The right to object to or restrict processing of your voluntary communications.</li>
+        </ul>
+        <p>
+          Because we do not maintain reader accounts or persistent user profiles, we may require proof of identity (such as contacting us from the corresponding email address) to process any inquiry.
+        </p>
+      </section>
+
+      <section class="policy-section">
+        <h2>13. Changes to This Policy</h2>
+        <p>
+          We may periodically update this Privacy Policy to reflect changes in our editorial operations, technical infrastructure, or legal obligations. When changes are made, we will update the &ldquo;Last Updated&rdquo; date at the top of this document.
+        </p>
+      </section>
+
+      <section class="policy-section contact-card-section">
+        <h2>14. Contact Us</h2>
+        <p>
+          If you have questions, feedback, or privacy-related requests regarding this policy, please reach out to our editorial desk:
+        </p>
+        <div class="contact-box">
+          <p><strong>Publication:</strong> {SITE_CONFIG.name}</p>
+          <p><strong>Editorial Desk:</strong> <a href={`mailto:${contactEmail}`}>{contactEmail}</a></p>
+          <p><strong>Website:</strong> <a href={SITE_CONFIG.url}>{SITE_CONFIG.url}</a></p>
+        </div>
+      </section>
+    </article>
   </main>
 </BaseLayout>
 
 <style>
   .static-header {
-    padding: 4.5rem 0 3rem;
+    padding: 4rem 0 2.5rem;
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
   }
@@ -62,18 +255,166 @@ const canonicalUrl = getCanonicalUrl('/privacy');
   }
 
   .static-title {
-    font-size: 3rem;
+    font-size: 2.75rem;
     letter-spacing: -0.025em;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
     font-weight: 700;
+    line-height: 1.15;
   }
 
   .static-subhead {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     color: var(--color-text-muted);
+    margin: 0;
   }
 
   .static-content {
-    padding: 3.5rem 1.5rem 6rem;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  .prose-content {
+    max-width: 720px;
+    margin: 0 auto;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+  }
+
+  .policy-section {
+    margin-bottom: 2.75rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .policy-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .policy-section h2 {
+    font-size: 1.375rem;
+    font-weight: 700;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--color-text-main);
+    letter-spacing: -0.015em;
+  }
+
+  .policy-section h3 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--color-text-main);
+  }
+
+  .policy-section p {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--color-text-main);
+  }
+
+  .policy-section ul {
+    margin: 0 0 1.25rem 1.25rem;
+    padding: 0;
+  }
+
+  .policy-section li {
+    margin-bottom: 0.5rem;
+  }
+
+  .policy-section a {
+    color: var(--color-brand-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .policy-section a:hover {
+    color: var(--color-text-main);
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.35rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .highlight-callout {
+    background-color: var(--color-surface);
+    border-left: 3px solid var(--color-brand-accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+  }
+
+  .highlight-callout strong {
+    display: block;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    color: var(--color-text-main);
+  }
+
+  .highlight-callout p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .service-table-wrapper {
+    overflow-x: auto;
+    margin: 1.25rem 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .service-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  .service-table th {
+    background-color: var(--color-surface);
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .service-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .table-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-top: 0.5rem;
+  }
+
+  .contact-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .contact-box p {
+    margin-bottom: 0.35rem;
+    font-size: 0.9375rem;
+  }
+
+  .contact-box p:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 640px) {
+    .static-title { font-size: 2.125rem; }
+    .static-content { padding: 2rem 1rem 4rem; }
   }
 </style>
