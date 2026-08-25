@@ -178,7 +178,7 @@ function toDatetimeInput(ts: number | null): string {
 
   {errorMessage && <div class="alert alert-danger">{errorMessage}</div>}
 
-  <form method="POST" class="editor-form">
+  <form id="main-article-form" method="POST" class="editor-form">
     <div class="editor-layout">
       <!-- Main Content Column -->
       <div class="editor-main">
@@ -309,11 +309,11 @@ function toDatetimeInput(ts: number | null): string {
 
           <div class="form-actions-stack">
             {article.status !== 'published' && (
-              <button type="submit" name="action_publish" value="true" class="btn btn-primary btn-block" style="background-color: #16a34a; border-color: #15803d;">
+              <button type="submit" form="main-article-form" name="action_publish" value="true" class="btn btn-primary btn-block" style="background-color: #16a34a; border-color: #15803d;">
                 🚀 Save &amp; Publish Immediately
               </button>
             )}
-            <button type="submit" class="btn btn-secondary btn-block">
+            <button type="submit" form="main-article-form" class="btn btn-secondary btn-block">
               💾 Save Changes
             </button>
             <a href="/admin/articles" class="btn btn-secondary btn-block">
