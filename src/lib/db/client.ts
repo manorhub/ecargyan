@@ -20,6 +20,10 @@ import type {
   ArticleStatus,
   RedirectRecord,
   FreshnessReviewRecord,
+  SourcePolicyRecord,
+  PolicyStatus,
+  LicenseType,
+  SourceTier,
 } from './schema';
 import { logError, logInfo } from '../utils/logger';
 
@@ -2406,6 +2410,143 @@ export class DatabaseService {
         automation: { running: true, pending: 0, failed: 0, deadLetter: 0 },
         seo: { missingMeta: 0, orphanArticles: 0, brokenLinks: 0, redirects: 0 },
       };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SOURCE POLICY & WHITELIST ENGINE (Phase Extension)
+  // ---------------------------------------------------------------------------
+
+  async getSourcePolicy(sourceId: string): Promise<SourcePolicyRecord> {
+    const { SourcePolicyService } = await import('../sources/policy');
+    const service = new SourcePolicyService(this.db);
+    return service.getPolicy(sourceId);
+  }
+
+  async saveSourcePolicy(
+    sourceId: string,
+    data: {
+      researchAllowed: boolean;
+      commercialUseAllowed: boolean;
+      aiProcessingAllowed: boolean;
+      fullContentStorageAllowed: boolean;
+      metadataStorageAllowed: boolean;
+      attributionRequired: boolean;
+      attributionText: string | null;
+      publicLinkRequired: boolean;
+      publicSourceLink: string | null;
+      sourceTermsUrl: string | null;
+      licenseType: LicenseType;
+      sourceTier: SourceTier;
+      policyNotes: string | null;
+      reviewStatus: PolicyStatus;
+      nextReviewAt: number | null;
+    },
+    adminId: string | null
+  ): Promise<void> {
+    const { SourcePolicyService } = await import('../sources/policy');
+    const service = new SourcePolicyService(this.db);
+    return service.savePolicy(sourceId, data, adminId);
+  }
+
+  async listWhitelistSources(limit = 20, offset = 0): Promise<{ sources: SourcePolicyRecord[]; total: number }> {
+    try {
+      const countRes = await this.db
+        .prepare("SELECT COUNT(*) as count FROM source_policies WHERE review_status = 'ALLOWED' AND source_status = 'active'")
+        .first<{ count: number }>();
+      const total = countRes?.count ?? 0;
+
+      const { results } = await this.db
+        .prepare(`
+          SELECT 
+            sp.*,
+            s.name as source_name,
+            s.base_url as source_url,
+            s.source_type,
+            adm.email as reviewed_by_email
+          FROM source_policies sp
+          JOIN sources s ON sp.source_id = s.id
+          LEFT JOIN admins adm ON sp.reviewed_by = adm.id
+          WHERE sp.review_status = 'ALLOWED' AND s.status = 'active'
+          ORDER BY sp.updated_at DESC
+          LIMIT ? OFFSET ?
+        `)
+        .bind(limit, offset)
+        .all<SourcePolicyRecord>();
+
+      return { sources: results || [], total };
+    } catch (error) {
+      logError('Failed to list whitelist sources', error);
+      return { sources: [], total: 0 };
+    }
+  }
+
+  async listBlockedSources(limit = 20, offset = 0): Promise<{ sources: SourcePolicyRecord[]; total: number }> {
+    try {
+      const countRes = await this.db
+        .prepare("SELECT COUNT(*) as count FROM source_policies WHERE review_status = 'BLOCKED'")
+        .first<{ count: number }>();
+      const total = countRes?.count ?? 0;
+
+      const { results } = await this.db
+        .prepare(`
+          SELECT 
+            sp.*,
+            s.name as source_name,
+            s.base_url as source_url,
+            s.source_type,
+            adm.email as reviewed_by_email
+          FROM source_policies sp
+          JOIN sources s ON sp.source_id = s.id
+          LEFT JOIN admins adm ON sp.reviewed_by = adm.id
+          WHERE sp.review_status = 'BLOCKED'
+          ORDER BY sp.updated_at DESC
+          LIMIT ? OFFSET ?
+        `)
+        .bind(limit, offset)
+        .all<SourcePolicyRecord>();
+
+      return { sources: results || [], total };
+    } catch (error) {
+      logError('Failed to list blocked sources', error);
+      return { sources: [], total: 0 };
+    }
+  }
+
+  async getSourcePolicyMetrics(): Promise<{
+    allowed: number;
+    restricted: number;
+    blocked: number;
+    reviewRequired: number;
+    unknown: number;
+    total: number;
+  }> {
+    try {
+      const [allowedRes, restRes, blockRes, revRes, totalSourcesRes, totalConfiguredPoliciesRes] = await Promise.all([
+        this.db.prepare("SELECT COUNT(*) as c FROM source_policies WHERE review_status = 'ALLOWED'").first<{ c: number }>(),
+        this.db.prepare("SELECT COUNT(*) as c FROM source_policies WHERE review_status = 'RESTRICTED'").first<{ c: number }>(),
+        this.db.prepare("SELECT COUNT(*) as c FROM source_policies WHERE review_status = 'BLOCKED'").first<{ c: number }>(),
+        this.db.prepare("SELECT COUNT(*) as c FROM source_policies WHERE review_status = 'REVIEW_REQUIRED' OR (next_review_at IS NOT NULL AND next_review_at < ?)")
+          .bind(Date.now()).first<{ c: number }>(),
+        this.db.prepare("SELECT COUNT(*) as c FROM sources").first<{ c: number }>(),
+        this.db.prepare("SELECT COUNT(*) as c FROM source_policies").first<{ c: number }>(),
+      ]);
+
+      const totalSources = totalSourcesRes?.c ?? 0;
+      const configuredPolicies = totalConfiguredPoliciesRes?.c ?? 0;
+      const unconfigured = Math.max(0, totalSources - configuredPolicies);
+
+      return {
+        allowed: allowedRes?.c ?? 0,
+        restricted: restRes?.c ?? 0,
+        blocked: blockRes?.c ?? 0,
+        reviewRequired: revRes?.c ?? 0,
+        unknown: unconfigured,
+        total: totalSources,
+      };
+    } catch (error) {
+      logError('Failed to fetch source policy metrics', error);
+      return { allowed: 0, restricted: 0, blocked: 0, reviewRequired: 0, unknown: 0, total: 0 };
     }
   }
 }

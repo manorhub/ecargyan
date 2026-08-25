@@ -84,9 +84,9 @@ export class EditorialPipeline {
       throw new Error(`Research item not found: ${researchItemId}`);
     }
 
-    const { results: sources } = await this.db
+    const { results: rawSources } = await this.db
       .prepare(`
-        SELECT rs.source_url, s.name as source_name, si.title, si.description, si.content, rs.published_at
+        SELECT rs.source_id, rs.source_url, s.name as source_name, si.title, si.description, si.content, rs.published_at
         FROM research_sources rs
         JOIN sources s ON rs.source_id = s.id
         JOIN source_items si ON rs.source_item_id = si.id
@@ -94,6 +94,34 @@ export class EditorialPipeline {
       `)
       .bind(researchItemId)
       .all<any>();
+
+    // 1b. Filter sources through Source Policy AI Gate
+    const { SourcePolicyService } = await import('../sources/policy');
+    const policyService = new SourcePolicyService(this.db);
+    const validSources: any[] = [];
+    const policySnapshots: any[] = [];
+
+    for (const s of (rawSources || [])) {
+      const decision = await policyService.canProcessAi(s.source_id);
+      policySnapshots.push({
+        sourceId: s.source_id,
+        sourceName: s.source_name,
+        reviewStatus: decision.policy?.review_status || 'UNKNOWN',
+        aiAllowed: decision.allowed,
+        commercialAllowed: Boolean(decision.policy?.commercial_use_allowed),
+        attributionRequired: Boolean(decision.policy?.attribution_required),
+      });
+
+      if (decision.allowed) {
+        validSources.push(s);
+      }
+    }
+
+    if (validSources.length === 0 && (rawSources || []).length > 0) {
+      throw new Error(`All ${rawSources?.length} contributing sources are restricted or blocked from AI processing by configured Source Policy. Explicit editorial review required.`);
+    }
+
+    const sources = validSources;
 
     const { results: facts } = await this.db
       .prepare('SELECT fact, confidence FROM research_facts WHERE research_item_id = ?')
@@ -114,6 +142,7 @@ export class EditorialPipeline {
         excerpt: s.description ? s.description.slice(0, 400) : '',
       })),
       cleanReferenceText: research.normalized_content ? research.normalized_content.slice(0, 3000) : '',
+      policySnapshots,
     }, null, 2);
 
     const userPromptGuard = `

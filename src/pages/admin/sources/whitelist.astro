@@ -1,0 +1,303 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+const url = new URL(Astro.request.url);
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+const pageSize = 30;
+const offset = (page - 1) * pageSize;
+
+let whitelistData = { sources: [] as any[], total: 0 };
+if (dbService) {
+  whitelistData = await dbService.listWhitelistSources(pageSize, offset);
+}
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Never';
+  return new Date(ts).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+---
+
+<AdminLayout title="Source Whitelist" currentPath="/admin/sources/whitelist">
+  <div class="page-header">
+    <div>
+      <div class="breadcrumb-trail">
+        <a href="/admin/sources">Sources</a>
+        <span class="sep">/</span>
+        <span>Whitelist</span>
+      </div>
+      <h1 class="page-title">Source Policy Whitelist ({whitelistData.total})</h1>
+      <p class="page-description">
+        Sources explicitly evaluated and approved for automated research ingestion, AI synthesis, and commercial publication.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/sources" class="btn btn-secondary">All Sources</a>
+      <a href="/admin/sources/blocked" class="btn btn-secondary">Blocked Sources</a>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="card-header">
+      <h2 class="card-title">Approved Sources ({whitelistData.total})</h2>
+    </div>
+
+    {whitelistData.sources.length === 0 ? (
+      <div class="empty-box">
+        <p class="empty-text">No sources currently on the whitelist.</p>
+        <span class="empty-subtext">Review configured sources and grant explicit permissions to enable automated research processing.</span>
+        <div class="empty-action">
+          <a href="/admin/sources" class="btn btn-primary">Review Configured Sources</a>
+        </div>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Source Name</th>
+              <th>Type</th>
+              <th>Tier</th>
+              <th>Research</th>
+              <th>AI Processing</th>
+              <th>Commercial</th>
+              <th>Attribution</th>
+              <th>Next Review</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {whitelistData.sources.map((src) => (
+              <tr>
+                <td>
+                  <a href={`/admin/sources/${src.source_id}/policy`} class="source-title-link">
+                    {src.source_name}
+                  </a>
+                  <span class="source-url-hint">{src.source_url}</span>
+                </td>
+                <td>
+                  <span class="type-badge">{(src.source_type || 'rss').toUpperCase()}</span>
+                </td>
+                <td>
+                  <span class="badge badge-neutral">{src.source_tier}</span>
+                </td>
+                <td>
+                  {src.research_allowed ? (
+                    <span class="perm-tag perm-yes">✓ Allowed</span>
+                  ) : (
+                    <span class="perm-tag perm-no">✗ Restricted</span>
+                  )}
+                </td>
+                <td>
+                  {src.ai_processing_allowed ? (
+                    <span class="perm-tag perm-yes">✓ Allowed</span>
+                  ) : (
+                    <span class="perm-tag perm-no">✗ Off</span>
+                  )}
+                </td>
+                <td>
+                  {src.commercial_use_allowed ? (
+                    <span class="perm-tag perm-yes">✓ Allowed</span>
+                  ) : (
+                    <span class="perm-tag perm-no">✗ Review</span>
+                  )}
+                </td>
+                <td>
+                  {src.attribution_required ? (
+                    <span class="badge badge-warning">Required</span>
+                  ) : (
+                    <span class="badge badge-neutral">Optional</span>
+                  )}
+                </td>
+                <td>
+                  <span class="date-text">{formatDate(src.next_review_at)}</span>
+                </td>
+                <td class="text-right">
+                  <div class="actions-group">
+                    <a href={`/admin/sources/${src.source_id}/policy`} class="btn btn-primary btn-xs">
+                      Policy
+                    </a>
+                    <a href={`/admin/sources/${src.source_id}`} class="btn btn-secondary btn-xs">
+                      Details
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  .breadcrumb-trail {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .breadcrumb-trail a { color: var(--color-text-muted); text-decoration: none; }
+  .breadcrumb-trail a:hover { color: var(--color-brand-primary); }
+  .sep { color: var(--color-border); }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions { display: flex; gap: 0.75rem; }
+
+  .table-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+
+  .admin-table th {
+    padding: 0.75rem 1.25rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .admin-table td {
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .admin-table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.015);
+  }
+
+  .source-title-link {
+    font-weight: 600;
+    color: var(--color-text-main);
+    text-decoration: none;
+    display: block;
+  }
+
+  .source-title-link:hover {
+    color: var(--color-brand-accent);
+  }
+
+  .source-url-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: block;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .type-badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .perm-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .perm-yes {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+
+  .perm-no {
+    background-color: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .actions-group {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .btn-xs {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.75rem;
+  }
+
+  .empty-box {
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .empty-subtext {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-action {
+    margin-top: 1.5rem;
+  }
+</style>

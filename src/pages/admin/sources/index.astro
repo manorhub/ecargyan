@@ -13,15 +13,27 @@ const successMsg = url.searchParams.get('success') || '';
 const errorMsg = url.searchParams.get('error') || '';
 
 let sourcesData = { sources: [] as any[], total: 0 };
+let policyMetrics = { allowed: 0, restricted: 0, blocked: 0, reviewRequired: 0, unknown: 0, total: 0 };
+const sourcePoliciesMap = new Map<string, any>();
 
 if (dbService) {
-  sourcesData = await dbService.listSources({
-    status: statusFilter || undefined,
-    type: typeFilter || undefined,
-    search: search || undefined,
-    limit: 50,
-    offset: 0,
-  });
+  const [sData, pMetrics] = await Promise.all([
+    dbService.listSources({
+      status: statusFilter || undefined,
+      type: typeFilter || undefined,
+      search: search || undefined,
+      limit: 50,
+      offset: 0,
+    }),
+    dbService.getSourcePolicyMetrics(),
+  ]);
+  sourcesData = sData;
+  policyMetrics = pMetrics;
+
+  for (const src of sourcesData.sources) {
+    const pol = await dbService.getSourcePolicy(src.id);
+    sourcePoliciesMap.set(src.id, pol);
+  }
 }
 
 function formatDate(ts: number | null): string {
@@ -42,6 +54,16 @@ function getHealthBadge(source: any): { label: string; class: string } {
   if (source.last_success_at) return { label: 'Healthy', class: 'badge-success' };
   return { label: 'Untested', class: 'badge-neutral' };
 }
+
+function getPolicyBadge(status: string): { label: string; class: string } {
+  switch (status) {
+    case 'ALLOWED': return { label: 'Allowed', class: 'badge-success' };
+    case 'RESTRICTED': return { label: 'Restricted', class: 'badge-warning' };
+    case 'BLOCKED': return { label: 'Blocked', class: 'badge-danger' };
+    case 'REVIEW_REQUIRED': return { label: 'Review Due', class: 'badge-info' };
+    default: return { label: 'Unknown', class: 'badge-neutral' };
+  }
+}
 ---
 
 <AdminLayout title="Sources Registry" currentPath="/admin/sources">
@@ -49,16 +71,41 @@ function getHealthBadge(source: any): { label: string; class: string } {
     <div>
       <h1 class="page-title">Research & Source Registry</h1>
       <p class="page-description">
-        Configure external RSS/Atom feeds, technical wire services, and research sources for automated editorial ingestion.
+        Configure external RSS/Atom feeds, technical wire services, and research sources with explicit usage policies.
       </p>
     </div>
-    <div>
+    <div class="header-actions">
+      <a href="/admin/sources/whitelist" class="btn btn-secondary">View Whitelist</a>
       <a href="/admin/sources/new" class="btn btn-primary">Add Source</a>
     </div>
   </div>
 
   {successMsg && <div class="alert alert-success">{successMsg}</div>}
   {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Policy Overview Banner -->
+  <div class="policy-stats-grid">
+    <div class="policy-stat-card">
+      <span class="stat-num stat-allowed">{policyMetrics.allowed}</span>
+      <span class="stat-label">Allowed (Whitelist)</span>
+    </div>
+    <div class="policy-stat-card">
+      <span class="stat-num stat-restricted">{policyMetrics.restricted}</span>
+      <span class="stat-label">Restricted</span>
+    </div>
+    <div class="policy-stat-card">
+      <span class="stat-num stat-blocked">{policyMetrics.blocked}</span>
+      <span class="stat-label">Blocked</span>
+    </div>
+    <div class="policy-stat-card">
+      <span class="stat-num stat-review">{policyMetrics.reviewRequired}</span>
+      <span class="stat-label">Review Required</span>
+    </div>
+    <div class="policy-stat-card">
+      <span class="stat-num stat-unknown">{policyMetrics.unknown}</span>
+      <span class="stat-label">Unreviewed</span>
+    </div>
+  </div>
 
   <div class="filter-panel">
     <form method="GET" class="filter-form">
@@ -119,6 +166,7 @@ function getHealthBadge(source: any): { label: string; class: string } {
               <th>Source Name</th>
               <th>Type</th>
               <th>Health</th>
+              <th>Policy Status</th>
               <th>Items (New / Dupes)</th>
               <th>Last Ingested</th>
               <th class="text-right">Actions</th>
@@ -127,6 +175,8 @@ function getHealthBadge(source: any): { label: string; class: string } {
           <tbody>
             {sourcesData.sources.map((src) => {
               const health = getHealthBadge(src);
+              const pol = sourcePoliciesMap.get(src.id);
+              const policyBadge = getPolicyBadge(pol?.review_status || 'UNKNOWN');
               return (
                 <tr>
                   <td>
@@ -140,6 +190,11 @@ function getHealthBadge(source: any): { label: string; class: string } {
                   </td>
                   <td>
                     <span class:list={['badge', health.class]}>{health.label}</span>
+                  </td>
+                  <td>
+                    <a href={`/admin/sources/${src.id}/policy`} title="Manage source policy permissions">
+                      <span class:list={['badge', policyBadge.class]}>{policyBadge.label}</span>
+                    </a>
                   </td>
                   <td>
                     <div class="items-count-cell">
@@ -161,6 +216,9 @@ function getHealthBadge(source: any): { label: string; class: string } {
                           Fetch Now
                         </button>
                       </form>
+                      <a href={`/admin/sources/${src.id}/policy`} class="btn btn-secondary btn-xs" title="Configure source usage policy">
+                        Policy
+                      </a>
                       <a href={`/admin/sources/${src.id}`} class="btn btn-secondary btn-xs">
                         Details
                       </a>
@@ -372,5 +430,48 @@ function getHealthBadge(source: any): { label: string; class: string } {
     background-color: var(--color-danger-bg);
     color: var(--color-danger);
     border: 1px solid #fecaca;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .policy-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .policy-stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .stat-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-allowed { color: var(--color-success); }
+  .stat-restricted { color: var(--color-warning); }
+  .stat-blocked { color: var(--color-danger); }
+  .stat-review { color: #0284c7; }
+  .stat-unknown { color: var(--color-text-muted); }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 </style>

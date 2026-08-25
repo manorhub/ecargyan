@@ -109,3 +109,64 @@ export interface IngestionResult {
   durationMs: number;
   error?: string;
 }
+
+// -----------------------------------------------------------------------------
+// SOURCE POLICY & WHITELIST DOMAIN TYPES
+// -----------------------------------------------------------------------------
+
+export type LicenseType =
+  | 'UNKNOWN'
+  | 'ALL_RIGHTS_RESERVED'
+  | 'CC_BY'
+  | 'CC_BY_SA'
+  | 'CC0'
+  | 'PUBLIC_DOMAIN'
+  | 'CUSTOM'
+  | 'OTHER';
+
+export type PolicyStatus =
+  | 'UNKNOWN'
+  | 'ALLOWED'
+  | 'RESTRICTED'
+  | 'BLOCKED'
+  | 'REVIEW_REQUIRED';
+
+export type SourceTier = 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+
+export interface SourcePolicyRecord {
+  id: string;
+  source_id: string;
+  source_status: SourceStatus;
+  research_allowed: number; // 0 or 1
+  commercial_use_allowed: number; // 0 or 1
+  ai_processing_allowed: number; // 0 or 1
+  full_content_storage_allowed: number; // 0 or 1
+  metadata_storage_allowed: number; // 0 or 1
+  attribution_required: number; // 0 or 1
+  attribution_text: string | null;
+  public_link_required: number; // 0 or 1
+  public_source_link: string | null;
+  source_terms_url: string | null;
+  license_type: LicenseType;
+  source_tier: SourceTier;
+  policy_notes: string | null;
+  review_status: PolicyStatus;
+  reviewed_by: string | null;
+  last_reviewed_at: number | null;
+  next_review_at: number | null;
+  created_at: number;
+  updated_at: number;
+  // Computed relation fields
+  source_name?: string;
+  source_url?: string;
+  source_type?: SourceType;
+  reviewed_by_email?: string | null;
+}
+
+export interface SourcePolicyDecision {
+  allowed: boolean;
+  action: 'allow' | 'block' | 'review';
+  reason: string;
+  policy?: SourcePolicyRecord | null;
+}
+

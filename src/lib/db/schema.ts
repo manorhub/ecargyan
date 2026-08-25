@@ -197,6 +197,15 @@ export type {
   AdminSearchResult,
 } from '../admin/types';
 
+export type {
+  SourcePolicyRecord,
+  PolicyStatus,
+  LicenseType,
+  SourceTier,
+  SourcePolicyDecision,
+} from '../sources/types';
+
+
 
 
 

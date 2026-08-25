@@ -90,6 +90,25 @@ export class PublishingGuard {
       }
     }
 
+    // 7. Source Policy & Commercial Use Gate
+    const researchSourceItems = await this.db
+      .prepare(`
+        SELECT sp.review_status, sp.commercial_use_allowed, sp.attribution_required, s.name as source_name
+        FROM ai_runs ar
+        JOIN research_sources rs ON ar.research_item_id = rs.research_item_id
+        JOIN sources s ON rs.source_id = s.id
+        LEFT JOIN source_policies sp ON s.id = sp.source_id
+        WHERE ar.article_id = ?
+      `)
+      .bind(articleId)
+      .all<any>();
+
+    for (const rs of (researchSourceItems.results || [])) {
+      if (rs.review_status !== 'ALLOWED' || !rs.commercial_use_allowed) {
+        reasons.push(`Source '${rs.source_name}' does not permit automated commercial publishing (${rs.review_status || 'UNKNOWN'}). Editorial review required.`);
+      }
+    }
+
     if (reasons.length > 0) {
       return {
         passed: false,

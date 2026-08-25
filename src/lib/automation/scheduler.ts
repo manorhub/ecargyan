@@ -31,6 +31,15 @@ export class AutomationScheduler {
       const isDue = now >= lastChecked + intervalMs;
 
       if (isDue) {
+        // Policy Gate Check
+        const { SourcePolicyService } = await import('../sources/policy');
+        const policyService = new SourcePolicyService(this.db);
+        const policyDecision = await policyService.canIngest(source.id);
+
+        if (!policyDecision.allowed) {
+          continue; // Skip sources that are blocked or require review
+        }
+
         dueSources.push(source);
 
         // 2. Check for active duplicate jobs (idempotency safeguard)

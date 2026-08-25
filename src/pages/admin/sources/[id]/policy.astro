@@ -1,0 +1,494 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../lib/db/client';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/sources');
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+if (!dbService) return Astro.redirect('/500');
+
+const source = await dbService.getSourceById(id);
+if (!source) return Astro.redirect('/admin/sources?error=Source+not+found');
+
+const policy = await dbService.getSourcePolicy(id);
+
+const url = new URL(Astro.request.url);
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
+
+function formatDate(ts: number | null): string {
+  if (!ts) return 'Never';
+  return new Date(ts).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatDateInput(ts: number | null): string {
+  if (!ts) return '';
+  return new Date(ts).toISOString().split('T')[0];
+}
+
+function getPolicyBadge(status: string): { label: string; class: string } {
+  switch (status) {
+    case 'ALLOWED': return { label: 'Allowed (Whitelist)', class: 'badge-success' };
+    case 'RESTRICTED': return { label: 'Restricted', class: 'badge-warning' };
+    case 'BLOCKED': return { label: 'Blocked', class: 'badge-danger' };
+    case 'REVIEW_REQUIRED': return { label: 'Review Required', class: 'badge-info' };
+    default: return { label: 'Unknown (Unreviewed)', class: 'badge-neutral' };
+  }
+}
+
+const currentBadge = getPolicyBadge(policy.review_status);
+---
+
+<AdminLayout title={`Policy: ${source.name}`} currentPath="/admin/sources">
+  <div class="page-header">
+    <div>
+      <div class="breadcrumb-trail">
+        <a href="/admin/sources">Sources</a>
+        <span class="sep">/</span>
+        <a href={`/admin/sources/${source.id}`}>{source.name}</a>
+        <span class="sep">/</span>
+        <span>Usage Policy</span>
+      </div>
+      <h1 class="page-title">Source Usage Policy & Rights Gate</h1>
+      <p class="page-description">
+        Configure explicit copyright, AI processing, commercial rights, and attribution terms for this data source.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a href={`/admin/sources/${source.id}`} class="btn btn-secondary">Source Details</a>
+      <a href="/admin/sources" class="btn btn-secondary">Back to Registry</a>
+    </div>
+  </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
+
+  <!-- Neutral Legal Warning Banner -->
+  <div class="policy-notice-card">
+    <div class="notice-icon">⚖️</div>
+    <div class="notice-content">
+      <strong>Editorial Policy Standards</strong>
+      <p>
+        ECargyan enforces strict source provenance. Public accessibility or RSS feed availability is <strong>never</strong> assumed to grant commercial reuse or AI generation rights. Explicit policy review is mandatory before automated processing.
+      </p>
+    </div>
+  </div>
+
+  <div class="layout-grid">
+    <!-- Left Column: Edit Policy Form -->
+    <div class="main-column">
+      <form action={`/admin/sources/${source.id}/policy/update`} method="POST" class="policy-form">
+        <!-- Review Status & Tier Card -->
+        <div class="form-card">
+          <h2 class="card-title">1. Review Decision & Classification</h2>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="reviewStatus">Policy Review Status *</label>
+              <select name="reviewStatus" id="reviewStatus" class="form-input" required>
+                <option value="UNKNOWN" selected={policy.review_status === 'UNKNOWN'}>UNKNOWN (Halt Automated Pipeline)</option>
+                <option value="ALLOWED" selected={policy.review_status === 'ALLOWED'}>ALLOWED (Approved for Whitelist Pipeline)</option>
+                <option value="RESTRICTED" selected={policy.review_status === 'RESTRICTED'}>RESTRICTED (Metadata / Research Only)</option>
+                <option value="BLOCKED" selected={policy.review_status === 'BLOCKED'}>BLOCKED (Excluded from Ingestion & Processing)</option>
+                <option value="REVIEW_REQUIRED" selected={policy.review_status === 'REVIEW_REQUIRED'}>REVIEW_REQUIRED (Flagged for Re-evaluation)</option>
+              </select>
+              <span class="field-hint">Unknown or Review Required sources will not enter automated AI or publishing pipelines.</span>
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="sourceTier">Editorial Source Tier</label>
+              <select name="sourceTier" id="sourceTier" class="form-input">
+                <option value="PRIMARY" selected={policy.source_tier === 'PRIMARY'}>PRIMARY (Government / Official Manufacturer Release)</option>
+                <option value="SECONDARY" selected={policy.source_tier === 'SECONDARY'}>SECONDARY (Technical Wire / Industry Journal)</option>
+                <option value="TERTIARY" selected={policy.source_tier === 'TERTIARY'}>TERTIARY (News Aggregator / Community Blog)</option>
+              </select>
+              <span class="field-hint">Editorial ranking classification. High tier does not override legal permission.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="licenseType">Declared License Type</label>
+              <select name="licenseType" id="licenseType" class="form-input">
+                <option value="UNKNOWN" selected={policy.license_type === 'UNKNOWN'}>UNKNOWN (No declared open license)</option>
+                <option value="ALL_RIGHTS_RESERVED" selected={policy.license_type === 'ALL_RIGHTS_RESERVED'}>All Rights Reserved (Standard Copyright)</option>
+                <option value="CC_BY" selected={policy.license_type === 'CC_BY'}>Creative Commons BY (Attribution)</option>
+                <option value="CC_BY_SA" selected={policy.license_type === 'CC_BY_SA'}>Creative Commons BY-SA (ShareAlike)</option>
+                <option value="CC0" selected={policy.license_type === 'CC0'}>CC0 (Public Domain Dedication)</option>
+                <option value="PUBLIC_DOMAIN" selected={policy.license_type === 'PUBLIC_DOMAIN'}>Public Domain (Government / Open Work)</option>
+                <option value="CUSTOM" selected={policy.license_type === 'CUSTOM'}>Custom Publisher Terms</option>
+                <option value="OTHER" selected={policy.license_type === 'OTHER'}>Other</option>
+              </select>
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="sourceTermsUrl">Publisher Terms of Use URL</label>
+              <input
+                type="url"
+                name="sourceTermsUrl"
+                id="sourceTermsUrl"
+                class="form-input"
+                placeholder="https://example.com/terms"
+                value={policy.source_terms_url || ''}
+              />
+              <span class="field-hint">Reference link to publisher terms, syndication policy, or API terms.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline Permissions Card -->
+        <div class="form-card">
+          <h2 class="card-title">2. Usage Permissions & Pipeline Gates</h2>
+          
+          <div class="checkbox-grid">
+            <label class="checkbox-label">
+              <input type="checkbox" name="metadataStorageAllowed" value="1" checked={Boolean(policy.metadata_storage_allowed)} />
+              <div>
+                <strong>Metadata Storage Allowed</strong>
+                <p class="checkbox-desc">Store headline, author, canonical URL, and published timestamp in D1.</p>
+              </div>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="researchAllowed" value="1" checked={Boolean(policy.research_allowed)} />
+              <div>
+                <strong>Research & Fact Extraction Allowed</strong>
+                <p class="checkbox-desc">Include extracted technical facts in ECargyan Research Pool.</p>
+              </div>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="aiProcessingAllowed" value="1" checked={Boolean(policy.ai_processing_allowed)} />
+              <div>
+                <strong>AI Processing (DeepSeek) Allowed</strong>
+                <p class="checkbox-desc">Send normalized facts to DeepSeek for original draft synthesis.</p>
+              </div>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="commercialUseAllowed" value="1" checked={Boolean(policy.commercial_use_allowed)} />
+              <div>
+                <strong>Commercial Publication Allowed</strong>
+                <p class="checkbox-desc">Permit drafts synthesized from this source to enter autonomous publishing.</p>
+              </div>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="fullContentStorageAllowed" value="1" checked={Boolean(policy.full_content_storage_allowed)} />
+              <div>
+                <strong>Full Content Body Storage Allowed</strong>
+                <p class="checkbox-desc">Retain full raw article HTML/body in research cache.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Attribution & Citation Requirements Card -->
+        <div class="form-card">
+          <h2 class="card-title">3. Attribution & Link Citations</h2>
+
+          <div class="form-group">
+            <label class="checkbox-label mb-1">
+              <input type="checkbox" name="attributionRequired" value="1" checked={Boolean(policy.attribution_required)} />
+              <div>
+                <strong>Attribution Citation Required</strong>
+                <p class="checkbox-desc">Published articles referencing this research must credit the original publisher.</p>
+              </div>
+            </label>
+            <input
+              type="text"
+              name="attributionText"
+              class="form-input mt-05"
+              placeholder={`e.g., Reporting by ${source.name}`}
+              value={policy.attribution_text || ''}
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label mb-1">
+              <input type="checkbox" name="publicLinkRequired" value="1" checked={Boolean(policy.public_link_required)} />
+              <div>
+                <strong>Direct Public Source Link Required</strong>
+                <p class="checkbox-desc">Published articles must embed a verified outbound hyperlink to the source URL.</p>
+              </div>
+            </label>
+            <input
+              type="url"
+              name="publicSourceLink"
+              class="form-input mt-05"
+              placeholder={source.base_url}
+              value={policy.public_source_link || ''}
+            />
+          </div>
+        </div>
+
+        <!-- Policy Review Schedule & Notes Card -->
+        <div class="form-card">
+          <h2 class="card-title">4. Review Schedule & Evaluation Notes</h2>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="nextReviewAt">Next Review Due Date</label>
+              <input
+                type="date"
+                name="nextReviewAt"
+                id="nextReviewAt"
+                class="form-input"
+                value={formatDateInput(policy.next_review_at)}
+              />
+              <span class="field-hint">When this date passes, policy automatically flags as REVIEW_REQUIRED.</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="policyNotes">Evaluation Rationale & Audit Notes</label>
+            <textarea
+              name="policyNotes"
+              id="policyNotes"
+              rows="3"
+              class="form-input"
+              placeholder="Detail basis for review status: analyzed publisher terms, RSS feed conditions, API tier agreements..."
+            >{policy.policy_notes || ''}</textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Policy Settings</button>
+            <a href={`/admin/sources/${source.id}`} class="btn btn-secondary">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Source Provenance Summary Sidebar -->
+    <div class="sidebar-column">
+      <div class="info-card">
+        <h3 class="info-card-title">Source Overview</h3>
+        <dl class="meta-list">
+          <dt>Source Name</dt>
+          <dd><strong>{source.name}</strong></dd>
+
+          <dt>Base URL</dt>
+          <dd>
+            <a href={source.base_url} target="_blank" rel="noopener noreferrer" class="external-link">
+              {source.base_url} ↗
+            </a>
+          </dd>
+
+          <dt>Source Type</dt>
+          <dd><span class="type-badge">{source.source_type.toUpperCase()}</span></dd>
+
+          <dt>Feed URL</dt>
+          <dd class="truncate-text">{source.rss_url || 'None'}</dd>
+
+          <dt>Current Policy</dt>
+          <dd><span class:list={['badge', currentBadge.class]}>{currentBadge.label}</span></dd>
+
+          <dt>Last Evaluated</dt>
+          <dd>{formatDate(policy.last_reviewed_at)}</dd>
+
+          <dt>Evaluated By</dt>
+          <dd>{policy.reviewed_by_email || 'System Default'}</dd>
+
+          <dt>Next Review</dt>
+          <dd>{formatDate(policy.next_review_at)}</dd>
+        </dl>
+      </div>
+
+      <div class="info-card">
+        <h3 class="info-card-title">Quick Status Presets</h3>
+        <p class="hint-text">Pre-fill form values according to standard editorial archetypes:</p>
+        <div class="preset-buttons">
+          <button type="button" class="btn btn-secondary btn-sm btn-block" onclick="applyPreset('whitelist')">
+            Whitelist: Full AI + Commercial
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm btn-block" onclick="applyPreset('restricted')">
+            Restricted: Research Only
+          </button>
+          <button type="button" class="btn btn-danger btn-sm btn-block" onclick="applyPreset('block')">
+            Block: Halt All Processing
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+  function applyPreset(preset) {
+    const statusSelect = document.getElementById('reviewStatus');
+    const researchCb = document.querySelector('input[name="researchAllowed"]');
+    const aiCb = document.querySelector('input[name="aiProcessingAllowed"]');
+    const commCb = document.querySelector('input[name="commercialUseAllowed"]');
+    const metaCb = document.querySelector('input[name="metadataStorageAllowed"]');
+    const fullCb = document.querySelector('input[name="fullContentStorageAllowed"]');
+
+    if (preset === 'whitelist') {
+      statusSelect.value = 'ALLOWED';
+      if (researchCb) researchCb.checked = true;
+      if (aiCb) aiCb.checked = true;
+      if (commCb) commCb.checked = true;
+      if (metaCb) metaCb.checked = true;
+      if (fullCb) fullCb.checked = true;
+    } else if (preset === 'restricted') {
+      statusSelect.value = 'RESTRICTED';
+      if (researchCb) researchCb.checked = true;
+      if (aiCb) aiCb.checked = false;
+      if (commCb) commCb.checked = false;
+      if (metaCb) metaCb.checked = true;
+      if (fullCb) fullCb.checked = false;
+    } else if (preset === 'block') {
+      statusSelect.value = 'BLOCKED';
+      if (researchCb) researchCb.checked = false;
+      if (aiCb) aiCb.checked = false;
+      if (commCb) commCb.checked = false;
+      if (metaCb) metaCb.checked = false;
+      if (fullCb) fullCb.checked = false;
+    }
+  }
+</script>
+
+<style>
+  .breadcrumb-trail {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .breadcrumb-trail a { color: var(--color-text-muted); text-decoration: none; }
+  .breadcrumb-trail a:hover { color: var(--color-brand-primary); }
+  .sep { color: var(--color-border); }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .header-actions { display: flex; gap: 0.75rem; }
+
+  .policy-notice-card {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+
+  .notice-icon { font-size: 1.5rem; line-height: 1; }
+  .notice-content strong { color: #166534; font-size: 0.875rem; display: block; margin-bottom: 0.25rem; }
+  .notice-content p { color: #15803d; font-size: 0.8125rem; margin: 0; line-height: 1.4; }
+
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  @media (max-width: 900px) {
+    .layout-grid { grid-template-columns: 1fr; }
+  }
+
+  .form-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .form-row { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+  @media (max-width: 600px) { .form-row { flex-direction: column; } }
+  .flex-1 { flex: 1; }
+
+  .form-group { margin-bottom: 1.25rem; }
+  .form-label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.35rem; }
+  .field-hint { display: block; font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.35rem; }
+
+  .checkbox-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .checkbox-label {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.875rem 1rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .checkbox-label input[type="checkbox"] {
+    margin-top: 0.2rem;
+    cursor: pointer;
+  }
+
+  .checkbox-label strong { font-size: 0.875rem; color: var(--color-text-main); display: block; }
+  .checkbox-desc { font-size: 0.75rem; color: var(--color-text-muted); margin: 0.15rem 0 0; }
+
+  .form-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .info-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .info-card-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .meta-list { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; font-size: 0.8125rem; }
+  .meta-list dt { color: var(--color-text-muted); font-weight: 500; }
+  .meta-list dd { color: var(--color-text-main); margin: 0; word-break: break-all; }
+
+  .preset-buttons { display: flex; flex-direction: column; gap: 0.5rem; }
+  .btn-block { width: 100%; text-align: center; }
+  .hint-text { font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 0.75rem; }
+  .truncate-text { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .alert { padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.875rem; margin-bottom: 1.5rem; }
+  .alert-success { background-color: var(--color-success-bg); color: var(--color-success); border: 1px solid #bbf7d0; }
+  .alert-danger { background-color: var(--color-danger-bg); color: var(--color-danger); border: 1px solid #fecaca; }
+  .mt-05 { margin-top: 0.5rem; }
+  .mb-1 { margin-bottom: 0.5rem; }
+</style>

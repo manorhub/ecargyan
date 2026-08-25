@@ -6,7 +6,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SourceRecord, IngestionResult, IngestionJobType } from './types';
 import { RssAdapter } from './adapters/rss';
-import { logError, logInfo } from '../utils/logger';
+import { logError, logInfo, logWarn } from '../utils/logger';
 
 export class IngestionPipeline {
   constructor(private readonly db: D1Database) {}
@@ -23,6 +23,34 @@ export class IngestionPipeline {
 
     if (!source) {
       throw new Error(`Source not found: ${sourceId}`);
+    }
+
+    // 1b. Policy Validation Gate
+    const { SourcePolicyService } = await import('./policy');
+    const policyService = new SourcePolicyService(this.db);
+    const policyDecision = await policyService.canIngest(sourceId);
+
+    if (!policyDecision.allowed) {
+      logWarn(`Ingestion halted for source ${sourceId}: ${policyDecision.reason}`);
+      await this.db
+        .prepare(`
+          INSERT INTO ingestion_jobs (id, source_id, job_type, status, attempts, items_fetched, items_new, items_duplicate, items_failed, started_at, completed_at, error_message, created_at, updated_at)
+          VALUES (?, ?, ?, 'failed', 1, 0, 0, 0, 0, ?, ?, ?, ?, ?)
+        `)
+        .bind(jobId, sourceId, jobType, startTime, Date.now(), policyDecision.reason, startTime, startTime)
+        .run();
+
+      return {
+        jobId,
+        sourceId,
+        status: 'failed',
+        itemsFetched: 0,
+        itemsNew: 0,
+        itemsDuplicate: 0,
+        itemsFailed: 0,
+        durationMs: Date.now() - startTime,
+        error: policyDecision.reason,
+      };
     }
 
     // 2. Initialize Ingestion Job
