@@ -1,103 +1,500 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE_CONFIG, getCanonicalUrl } from '../lib/config/site';
+import { getDb } from '../lib/db/client';
+
+const runtimeEnv = Astro.locals.runtime?.env;
+const dbService = getDb(runtimeEnv);
+
+let contactEmail = 'editorial@ecargyan.com';
+let experienceYears = '4+';
+
+if (dbService) {
+  const [dbEmail, dbExp] = await Promise.all([
+    dbService.getSetting('contact_email'),
+    dbService.getSetting('editorial_experience_years'),
+  ]);
+  if (dbEmail) contactEmail = dbEmail;
+  if (dbExp) experienceYears = dbExp;
+}
 
 const canonicalUrl = getCanonicalUrl('/about');
 ---
 
 <BaseLayout
   seo={{
-    title: 'About — Editorial Mission & Standards',
-    description: 'ECargyan is an independent automotive intelligence and technical editorial publication.',
+    title: `About ECargyan | EV & Electric Mobility Intelligence`,
+    description: `Learn about ECargyan's editorial mission, 4+ years of EV domain experience, multi-source research methodology, and transparent publishing standards.`,
     canonicalUrl,
   }}
   currentPath="/about"
 >
-  <header class="static-header">
+  <header class="about-header">
     <div class="container-narrow">
-      <span class="static-kicker">Publication Masthead</span>
-      <h1 class="static-title">About {SITE_CONFIG.name}</h1>
-      <p class="static-subhead">
-        Independent editorial coverage of modern vehicle architectures, powertrain technologies, and automotive software.
+      <span class="about-kicker">Editorial Identity &amp; Methodology</span>
+      <h1 class="about-title">About {SITE_CONFIG.name}</h1>
+      <p class="about-lead">
+        Independent, research-driven technical analysis and market intelligence covering the global electric mobility revolution.
       </p>
     </div>
   </header>
 
-  <main class="container-narrow static-content prose">
-    <h2>Editorial Mission</h2>
-    <p>
-      {SITE_CONFIG.name} delivers structured technical analysis, engineering benchmarks, and industry intelligence across global automotive ecosystems. Our coverage focuses on electric mobility, battery chemistry advancements, autonomous driving architectures, and automotive manufacturing.
-    </p>
-
-    <h2>Publishing Standards & Independence</h2>
-    <p>
-      Our reports are authored and verified independently. We prioritize engineering depth, verified telemetry, and primary manufacturer documentation over promotional press releases.
-    </p>
-
-    <h2>Technology Foundation</h2>
-    <p>
-      {SITE_CONFIG.name} is engineered on a modern edge publishing stack built with Astro.js and Cloudflare edge infrastructure, delivering instantaneous load times and secure, resilient delivery worldwide.
-    </p>
-
-    <div class="contact-box">
-      <h3>Editorial Correspondence</h3>
-      <p>
-        For research inquiries, corrections, or intelligence tips, please reach out via our <a href="/contact">Dispatch Desk</a>.
+  <main class="container-narrow about-content">
+    <!-- Mission & Positioning -->
+    <section class="content-block">
+      <h2 class="block-title">Our Editorial Mission</h2>
+      <p class="paragraph-lead">
+        {SITE_CONFIG.name} exists to make rapidly evolving electric vehicle technology, powertrain engineering, and mobility infrastructure understandable through rigorous research, source analysis, and clear editorial reporting.
       </p>
-    </div>
+      <p>
+        The automotive landscape is undergoing its most profound transformation in over a century. Internal combustion platforms are giving way to high-voltage battery architectures, software-defined vehicles, integrated compute units, and nationwide charging networks. In an environment flooded with promotional press releases and fragmented specifications, {SITE_CONFIG.name} focuses on <strong>context over noise</strong>—explaining not just what was announced, but how it works and why it matters to engineers, buyers, and industry observers.
+      </p>
+    </section>
+
+    <!-- Domain Experience -->
+    <section class="content-block experience-block">
+      <div class="experience-inner">
+        <span class="experience-badge">{experienceYears} Years of EV Focus</span>
+        <h3 class="experience-heading">Hands-On Domain Experience</h3>
+        <p class="experience-text">
+          Our editorial work is built on more than {experienceYears.replace('+', '')} years of continuous tracking across the electric mobility landscape. From early cell packaging and 400V inverter topologies to modern solid-state research, silicon-carbide power electronics, dedicated EV skateboard architectures, and urban charging infrastructure, we bring deep historical and technical perspective to every dispatch.
+        </p>
+      </div>
+    </section>
+
+    <!-- Scope of Coverage -->
+    <section class="content-block">
+      <h2 class="block-title">What We Cover</h2>
+      <p>
+        Our coverage spans technical breakthroughs, vehicle architecture reviews, supply chain developments, and market data across India and major international EV hubs:
+      </p>
+      <div class="topics-grid">
+        <div class="topic-item">
+          <h4>Battery &amp; Cell Chemistry</h4>
+          <p>Lithium iron phosphate (LFP), nickel-rich chemistries (NMC), solid-state research, cathode innovations, and thermal runaway prevention.</p>
+        </div>
+        <div class="topic-item">
+          <h4>Powertrain &amp; Inverters</h4>
+          <p>Permanent magnet synchronous motors, silicon carbide (SiC) inverters, 800V voltage architectures, and regenerative braking dynamics.</p>
+        </div>
+        <div class="topic-item">
+          <h4>Charging Infrastructure</h4>
+          <p>Combined Charging System (CCS), NACS standards, ultra-fast DC dispensers, megawatt charging, and grid balancing.</p>
+        </div>
+        <div class="topic-item">
+          <h4>Software-Defined Vehicles</h4>
+          <p>Zonal electronic control architectures, over-the-air (OTA) firmware pipelines, advanced driver assistance (ADAS), and vehicle telemetry.</p>
+        </div>
+        <div class="topic-item">
+          <h4>Indian &amp; Global EV Markets</h4>
+          <p>Electric passenger vehicles, electric two-wheelers, commercial fleet electrification, manufacturing policies (PLI schemes), and local battery localization.</p>
+        </div>
+        <div class="topic-item">
+          <h4>Commercial &amp; Fleet Mobility</h4>
+          <p>Electric buses, last-mile commercial haulage, battery swapping ecosystems, and total cost of ownership (TCO) analytics.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Editorial Approach & Methodology -->
+    <section class="content-block">
+      <h2 class="block-title">Our Editorial Methodology</h2>
+      <p>
+        We believe that trustworthy automotive reporting requires structured verification rather than rushed syndication. Every article on {SITE_CONFIG.name} progresses through a multi-stage editorial pipeline:
+      </p>
+
+      <div class="pipeline-steps">
+        <div class="step-card">
+          <div class="step-num">01</div>
+          <div class="step-body">
+            <h4>Multi-Source Research Ingestion</h4>
+            <p>We monitor and ingest technical filings, patent registries, primary automaker engineering documents, government transport notifications, and verified technical wire feeds.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">02</div>
+          <div class="step-body">
+            <h4>Source Policy &amp; Provenance Tracking</h4>
+            <p>Every source is evaluated under our internal Source Policy system. We verify usage permissions, evaluate reliability signals, and maintain internal lineage records for every fact.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">03</div>
+          <div class="step-body">
+            <h4>AI-Assisted Synthesis</h4>
+            <p>We utilize server-side artificial intelligence tools (DeepSeek API) to assist in organizing raw technical data, comparing complex multi-source specs, and drafting initial article structures.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">04</div>
+          <div class="step-body">
+            <h4>Automated Quality &amp; Consistency Gating</h4>
+            <p>Drafts undergo automated algorithmic scoring for keyword relevance, structural clarity, readability, and factual consistency before advancing to review.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">05</div>
+          <div class="step-body">
+            <h4>Editorial Review &amp; Publication</h4>
+            <p>Articles are evaluated by human editorial staff to verify contextual nuance, technical accuracy, and adherence to publishing guidelines prior to public release.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI Transparency -->
+    <section class="content-block">
+      <h2 class="block-title">AI Transparency &amp; Editorial Accountability</h2>
+      <p>
+        We are fully transparent about how technology is used in our newsroom. Technology helps us synthesize high volumes of engineering telemetry quickly, but it never replaces editorial responsibility.
+      </p>
+      <div class="transparency-callout">
+        <strong>Our AI Principles:</strong>
+        <ul>
+          <li><strong>Assistant, Not Author:</strong> AI models assist with research clustering, summary generation, and structural outlining; editorial judgment determines narrative conclusions.</li>
+          <li><strong>No Reader Data Sharing:</strong> Reader correspondence, emails, and website telemetry are never fed into external AI training pipelines.</li>
+          <li><strong>Fact Checking:</strong> Because generative AI models can introduce hallucinations or misinterpret specifications, technical claims and battery telemetry are cross-referenced against primary manufacturer filings.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Accuracy & Corrections -->
+    <section class="content-block">
+      <h2 class="block-title">Commitment to Accuracy &amp; Corrections</h2>
+      <p>
+        In automotive technology, vehicle specifications, pricing, battery warranties, software releases, and regional incentives change frequently. An article accurate on the day of launch may be superseded by subsequent over-the-air firmware updates or homologation revisions.
+      </p>
+      <p>
+        We are committed to correcting material errors promptly. When a factual inaccuracy is identified and verified, we update the article and reflect the revised state with an updated timestamp. If you spot a factual error in any dispatch, please inform our desk via our <a href="/contact">Dispatch Desk</a>.
+      </p>
+    </section>
+
+    <!-- Editorial Independence -->
+    <section class="content-block">
+      <h2 class="block-title">Editorial Independence</h2>
+      <p>
+        {SITE_CONFIG.name} maintains strict editorial independence. Our analyses, vehicle comparisons, and powertrain assessments are conducted without commercial interference. We do not allow automotive manufacturers, public relations agencies, or advertising sponsors to influence or dictate the factual conclusions of our reporting.
+      </p>
+    </section>
+
+    <!-- Who We Write For -->
+    <section class="content-block">
+      <h2 class="block-title">Who We Write For</h2>
+      <p>
+        {SITE_CONFIG.name} is written for a diverse community united by a serious interest in modern automotive engineering:
+      </p>
+      <ul class="audience-list">
+        <li><strong>Prospective EV Buyers &amp; Current Owners:</strong> Seeking objective real-world charging insights, range benchmarks, battery longevity expectations, and model comparisons.</li>
+        <li><strong>Automotive &amp; Electrical Engineers:</strong> Exploring cell chemistry improvements, motor inverter topologies, high-voltage safety, and software architecture.</li>
+        <li><strong>Fleet Operators &amp; Mobility Planners:</strong> Analyzing total cost of ownership (TCO), commercial vehicle electrification, and fast-charging grid capacity.</li>
+        <li><strong>Industry Analysts &amp; Enthusiasts:</strong> Following manufacturing investments, gigafactory expansions, policy incentives, and global market trends.</li>
+      </ul>
+    </section>
+
+    <!-- Contact & Dispatch Desk Box -->
+    <section class="contact-card">
+      <h3 class="contact-heading">Connect with Our Editorial Desk</h3>
+      <p class="contact-text">
+        Have a technical question, verified news tip, press release, or factual correction? We welcome collaboration from researchers, engineers, and industry contributors.
+      </p>
+      <div class="contact-links">
+        <a href="/contact" class="btn btn-primary">Dispatch Desk</a>
+        <a href={`mailto:${contactEmail}`} class="btn btn-secondary">{contactEmail}</a>
+      </div>
+      <div class="governance-nav">
+        <span>Governance:</span>
+        <a href="/privacy">Privacy Policy</a>
+        &bull;
+        <a href="/terms">Terms of Service</a>
+        &bull;
+        <a href="/rss.xml">RSS Feed</a>
+      </div>
+    </section>
   </main>
 </BaseLayout>
 
 <style>
-  .static-header {
+  .about-header {
     padding: 4.5rem 0 3rem;
     background-color: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
   }
 
-  .static-kicker {
+  .about-kicker {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     color: var(--color-brand-accent);
     display: block;
     margin-bottom: 0.5rem;
   }
 
-  .static-title {
+  .about-title {
     font-size: 3rem;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.03em;
     margin-bottom: 0.75rem;
     font-weight: 700;
+    line-height: 1.15;
   }
 
-  .static-subhead {
+  .about-lead {
     font-size: 1.1875rem;
     color: var(--color-text-muted);
-    line-height: 1.5;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 680px;
   }
 
-  .static-content {
+  .about-content {
     padding: 3.5rem 1.5rem 6rem;
   }
 
-  .contact-box {
-    margin-top: 3.5rem;
-    padding: 2rem;
+  .content-block {
+    margin-bottom: 3.5rem;
+  }
+
+  .block-title {
+    font-size: 1.625rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-top: 0;
+    margin-bottom: 1.25rem;
+    color: var(--color-text-main);
+  }
+
+  .paragraph-lead {
+    font-size: 1.125rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+    margin-bottom: 1.25rem;
+  }
+
+  p {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+    margin-top: 0;
+    margin-bottom: 1.25rem;
+  }
+
+  /* Experience Block */
+  .experience-block {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-brand-accent);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 2rem 2.25rem;
+  }
+
+  .experience-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-brand-accent);
+    background-color: var(--color-surface-subtle);
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--color-border);
+  }
+
+  .experience-heading {
+    font-size: 1.375rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem 0;
+    color: var(--color-text-main);
+  }
+
+  .experience-text {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  /* Topics Grid */
+  .topics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .topic-item {
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
+    padding: 1.5rem;
   }
 
-  .contact-box h3 {
-    margin-top: 0;
+  .topic-item h4 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    color: var(--color-text-main);
+  }
+
+  .topic-item p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Pipeline Steps */
+  .pipeline-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .step-card {
+    display: flex;
+    gap: 1.5rem;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand-accent);
+    background-color: var(--color-surface-subtle);
+    padding: 0.4rem 0.65rem;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    border: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .step-body h4 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    margin: 0 0 0.35rem 0;
+    color: var(--color-text-main);
+  }
+
+  .step-body p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Transparency Callout */
+  .transparency-callout {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    margin-top: 1.25rem;
+  }
+
+  .transparency-callout strong {
+    display: block;
+    font-size: 0.9375rem;
+    margin-bottom: 0.75rem;
+    color: var(--color-text-main);
+  }
+
+  .transparency-callout ul {
+    margin: 0 0 0 1.25rem;
+    padding: 0;
+  }
+
+  .transparency-callout li {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
     margin-bottom: 0.5rem;
   }
 
-  .contact-box p {
+  .transparency-callout li:last-child {
     margin-bottom: 0;
+  }
+
+  .audience-list {
+    margin: 0 0 1.5rem 1.25rem;
+    padding: 0;
+  }
+
+  .audience-list li {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: var(--color-text-main);
+    margin-bottom: 0.75rem;
+  }
+
+  /* Contact CTA Card */
+  .contact-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 2.5rem;
+    text-align: center;
+    margin-top: 4rem;
+  }
+
+  .contact-heading {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem 0;
+  }
+
+  .contact-text {
     font-size: 0.9375rem;
     color: var(--color-text-muted);
+    max-width: 540px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .contact-links {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+  }
+
+  .governance-nav {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--color-border);
+    padding-top: 1.25rem;
+  }
+
+  .governance-nav a {
+    color: var(--color-text-main);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .governance-nav a:hover {
+    color: var(--color-brand-accent);
+  }
+
+  @media (max-width: 768px) {
+    .about-title { font-size: 2.25rem; }
+    .about-content { padding: 2.5rem 1rem 4rem; }
+    .topics-grid { grid-template-columns: 1fr; }
+    .step-card { flex-direction: column; gap: 0.75rem; }
+    .contact-card { padding: 1.75rem 1.25rem; }
   }
 </style>
