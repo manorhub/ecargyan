@@ -404,40 +404,40 @@ function toDatetimeInput(ts: number | null): string {
                 </div>
               </div>
 
-              <!-- Regeneration Form -->
-              <form action={`/admin/articles/${article.id}/images/generate`} method="POST" class="image-action-form">
-                <input type="hidden" name="forceRegenerate" value="true" />
+              <!-- Regeneration Form Trigger -->
+              <div class="image-action-form">
                 <input
                   type="text"
                   name="customSubject"
+                  form="regen-img-form"
                   placeholder="Custom visual tweak (optional)..."
                   class="form-input form-input-sm"
                 />
                 <div class="image-btn-row">
-                  <button type="submit" class="btn btn-secondary btn-sm">
+                  <button type="submit" form="regen-img-form" class="btn btn-secondary btn-sm">
                     &#8635; Regenerate
                   </button>
                   <button type="submit" form="remove-img-form" class="btn btn-danger-link btn-sm">
                     Detach
                   </button>
                 </div>
-              </form>
-              <form id="remove-img-form" action={`/admin/articles/${article.id}/images/remove`} method="POST" style="display: none;"></form>
+              </div>
             </div>
           ) : (
             <div class="no-image-banner">
               <p class="empty-img-text">No custom editorial image generated yet.</p>
-              <form action={`/admin/articles/${article.id}/images/generate`} method="POST" class="generate-form">
+              <div class="generate-form">
                 <input
                   type="text"
                   name="customSubject"
+                  form="first-gen-img-form"
                   placeholder="Optional prompt subject override..."
                   class="form-input form-input-sm"
                 />
-                <button type="submit" class="btn btn-primary btn-block btn-sm">
+                <button type="submit" form="first-gen-img-form" class="btn btn-primary btn-block btn-sm">
                   &#10024; Generate with FLUX.1
                 </button>
-              </form>
+              </div>
             </div>
           )}
 
@@ -451,10 +451,7 @@ function toDatetimeInput(ts: number | null): string {
                       <strong>v{img.version}</strong> &bull; {img.format} &bull; ${img.cost || 0}
                     </div>
                     {img.is_featured === 0 && (
-                      <form action={`/admin/articles/${article.id}/images/set-featured`} method="POST">
-                        <input type="hidden" name="imageId" value={img.id} />
-                        <button type="submit" class="btn btn-outline-xs">Set Active</button>
-                      </form>
+                      <button type="submit" form={`set-feat-${img.id}`} class="btn btn-outline-xs">Set Active</button>
                     )}
                   </div>
                 ))}
@@ -551,15 +548,9 @@ function toDatetimeInput(ts: number | null): string {
                       &ldquo;...{opp.contextSentence}...&rdquo;
                     </p>
                     <div class="opp-actions">
-                      <form action="/admin/seo/inbound/apply" method="POST">
-                        <input type="hidden" name="sourceArticleId" value={opp.sourceArticleId} />
-                        <input type="hidden" name="targetArticleId" value={article.id} />
-                        <input type="hidden" name="originalSentence" value={opp.contextSentence} />
-                        <input type="hidden" name="replacementSentence" value={opp.suggestedReplacement} />
-                        <button type="submit" class="btn btn-primary btn-xs">
-                          ⚡ Auto-Inject Link
-                        </button>
-                      </form>
+                      <button type="submit" form={`inbound-inject-${opp.sourceArticleId}`} class="btn btn-primary btn-xs">
+                        ⚡ Auto-Inject Link
+                      </button>
                       <a href={`/admin/articles/${opp.sourceArticleId}/edit`} target="_blank" class="btn btn-outline-xs">
                         Open Editor &nearr;
                       </a>
@@ -593,6 +584,28 @@ function toDatetimeInput(ts: number | null): string {
       </div>
     </div>
   </form>
+
+  <!-- Auxiliary Standalone Forms (Rendered outside main editor form to prevent HTML5 nested form breakage) -->
+  <form id="regen-img-form" action={`/admin/articles/${article.id}/images/generate`} method="POST" style="display:none;">
+    <input type="hidden" name="forceRegenerate" value="true" />
+  </form>
+  <form id="remove-img-form" action={`/admin/articles/${article.id}/images/remove`} method="POST" style="display:none;"></form>
+  <form id="first-gen-img-form" action={`/admin/articles/${article.id}/images/generate`} method="POST" style="display:none;"></form>
+
+  {articleImages.filter((img) => img.is_featured === 0).map((img) => (
+    <form id={`set-feat-${img.id}`} action={`/admin/articles/${article.id}/images/set-featured`} method="POST" style="display:none;">
+      <input type="hidden" name="imageId" value={img.id} />
+    </form>
+  ))}
+
+  {inboundOpportunities.map((opp) => (
+    <form id={`inbound-inject-${opp.sourceArticleId}`} action="/admin/seo/inbound/apply" method="POST" style="display:none;">
+      <input type="hidden" name="sourceArticleId" value={opp.sourceArticleId} />
+      <input type="hidden" name="targetArticleId" value={article.id} />
+      <input type="hidden" name="originalSentence" value={opp.contextSentence} />
+      <input type="hidden" name="replacementSentence" value={opp.suggestedReplacement} />
+    </form>
+  ))}
 </AdminLayout>
 
 <style>
