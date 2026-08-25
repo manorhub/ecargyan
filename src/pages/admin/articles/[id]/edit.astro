@@ -45,16 +45,19 @@ const currentTagIds = new Set((article.tags || []).map((t) => t.id));
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
+    const isPublishAction = formData.get('action_publish') === 'true';
     const title = (formData.get('title') as string || '').trim();
     const customSlug = (formData.get('slug') as string || '').trim();
     const excerpt = (formData.get('excerpt') as string || '').trim();
     const content = (formData.get('content') as string || '').trim();
-    const status = (formData.get('status') as ArticleStatus || 'draft');
+    const rawStatus = (formData.get('status') as ArticleStatus || 'draft');
+    const status: ArticleStatus = isPublishAction ? 'published' : rawStatus;
+
     const categoryId = (formData.get('category_id') as string || '').trim() || null;
     const authorId = (formData.get('author_id') as string || '').trim() || null;
     const featuredImageId = (formData.get('featured_image_id') as string || '').trim() || null;
     const scheduledAtStr = formData.get('scheduled_at') as string;
-    const scheduledAt = scheduledAtStr ? new Date(scheduledAtStr).getTime() : null;
+    const scheduledAt = (status === 'scheduled' && scheduledAtStr) ? new Date(scheduledAtStr).getTime() : null;
 
     const selectedTagIds = formData.getAll('tag_ids') as string[];
 
@@ -96,14 +99,18 @@ if (Astro.request.method === 'POST') {
 
       // Phase 9: Record immutable revision snapshot
       if (runtimeEnv?.DB) {
-        const { ArticleRevisionService } = await import('../../../../lib/admin/revisions');
-        const revService = new ArticleRevisionService(runtimeEnv.DB);
-        await revService.createRevision(
-          id,
-          { title, excerpt: excerpt || null, content, categoryId, status },
-          Astro.locals.admin?.id || null,
-          status === 'published' ? 'publish' : 'save'
-        );
+        try {
+          const { ArticleRevisionService } = await import('../../../../lib/admin/revisions');
+          const revService = new ArticleRevisionService(runtimeEnv.DB);
+          await revService.createRevision(
+            id,
+            { title, excerpt: excerpt || null, content, categoryId, status },
+            Astro.locals.admin?.id || null,
+            status === 'published' ? 'publish' : 'save'
+          );
+        } catch (e) {
+          // Non-blocking revision
+        }
       }
 
       if (Astro.locals.admin) {
@@ -132,10 +139,10 @@ if (Astro.request.method === 'POST') {
         }
       }
 
-      return Astro.redirect('/admin/articles', 302);
+      return Astro.redirect(`/admin/articles?success=Article+“${encodeURIComponent(title)}”+${status === 'published' ? 'published' : 'saved'}+successfully!`, 302);
     }
-  } catch (err) {
-    errorMessage = 'Failed to update article.';
+  } catch (err: any) {
+    errorMessage = `Failed to update article: ${err?.message || err}`;
   }
 }
 
@@ -159,6 +166,13 @@ function toDatetimeInput(ts: number | null): string {
       <a href={`/admin/articles/${article.id}/preview`} class="btn btn-secondary" target="_blank">
         Preview Draft &nearr;
       </a>
+      {article.status !== 'published' && (
+        <form action={`/admin/articles/${article.id}/publish`} method="POST" style="display:inline;">
+          <button type="submit" class="btn btn-primary" style="background-color: #16a34a; border-color: #15803d;">
+            🚀 Publish Now
+          </button>
+        </form>
+      )}
     </div>
   </div>
 
@@ -294,8 +308,13 @@ function toDatetimeInput(ts: number | null): string {
           )}
 
           <div class="form-actions-stack">
-            <button type="submit" class="btn btn-primary btn-block">
-              Save Changes
+            {article.status !== 'published' && (
+              <button type="submit" name="action_publish" value="true" class="btn btn-primary btn-block" style="background-color: #16a34a; border-color: #15803d;">
+                🚀 Save &amp; Publish Immediately
+              </button>
+            )}
+            <button type="submit" class="btn btn-secondary btn-block">
+              💾 Save Changes
             </button>
             <a href="/admin/articles" class="btn btn-secondary btn-block">
               Cancel

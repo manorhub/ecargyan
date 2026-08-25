@@ -44,6 +44,8 @@ function formatDate(ts: number | null): string {
     year: 'numeric',
   });
 }
+const successMsg = url.searchParams.get('success') || '';
+const errorMsg = url.searchParams.get('error') || '';
 ---
 
 <AdminLayout title="Articles" currentPath="/admin/articles">
@@ -58,6 +60,9 @@ function formatDate(ts: number | null): string {
       <a href="/admin/articles/new" class="btn btn-primary">Create Article</a>
     </div>
   </div>
+
+  {successMsg && <div class="alert alert-success">{successMsg}</div>}
+  {errorMsg && <div class="alert alert-danger">{errorMsg}</div>}
 
   <div class="filter-panel">
     <form method="GET" class="filter-form">
@@ -170,6 +175,13 @@ function formatDate(ts: number | null): string {
                 <td><span class="date-text">{formatDate(art.updated_at)}</span></td>
                 <td class="text-right">
                   <div class="actions-group">
+                    {art.status !== 'published' && (
+                      <form action={`/admin/articles/${art.id}/publish`} method="POST" style="display:inline;" onsubmit="return confirm('Publish this article live to the website immediately?');">
+                        <button type="submit" class="btn btn-primary btn-xs" style="background-color: #16a34a; border-color: #15803d;">
+                          ⚡ Publish
+                        </button>
+                      </form>
+                    )}
                     <a href={`/admin/articles/${art.id}/preview`} class="btn btn-secondary btn-xs">
                       Preview
                     </a>

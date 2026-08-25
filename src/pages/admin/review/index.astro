@@ -104,9 +104,14 @@ function formatDate(ts: number): string {
                 </td>
                 <td class="text-right">
                   <div class="action-buttons">
-                    <a href={`/admin/articles/${art.id}/edit`} class="btn btn-primary btn-xs">
-                      Review & Publish
+                    <a href={`/admin/articles/${art.id}/edit`} class="btn btn-secondary btn-xs">
+                      Edit Draft
                     </a>
+                    <form action={`/admin/articles/${art.id}/publish`} method="POST" style="display:inline;" onsubmit="return confirm('Publish this article live to the site immediately?');">
+                      <button type="submit" class="btn btn-primary btn-xs" style="background-color: #16a34a; border-color: #15803d;">
+                        ⚡ Publish Now
+                      </button>
+                    </form>
                   </div>
                 </td>
               </tr>
