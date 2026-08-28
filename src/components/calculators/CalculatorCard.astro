@@ -1,0 +1,163 @@
+---
+import type { CalculatorMeta } from '../../lib/calculators/types.ts';
+
+interface Props {
+  calculator: CalculatorMeta;
+  featured?: boolean;
+}
+
+const { calculator, featured = false } = Astro.props;
+---
+
+<article class:list={['calc-card', { 'calc-card-featured': featured }]}>
+  <div class="calc-card-body">
+    <div class="calc-card-header">
+      <span class="calc-category-badge">{calculator.categoryName}</span>
+    </div>
+
+    <h3 class="calc-title">
+      <a href={`/calculators/${calculator.slug}`}>
+        {calculator.title}
+      </a>
+    </h3>
+
+    <p class="calc-tagline">
+      {calculator.tagline}
+    </p>
+
+    <div class="calc-formula-preview">
+      <span class="formula-preview-label">Primary Metric:</span>
+      <span class="formula-preview-metric">{calculator.primaryResultLabel}</span>
+    </div>
+  </div>
+
+  <div class="calc-card-footer">
+    <a href={`/calculators/${calculator.slug}`} class="calc-action-btn">
+      <span>Open Tool</span>
+      <span class="btn-arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</article>
+
+<style>
+  .calc-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .calc-card:hover {
+    border-color: var(--color-electric-accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .calc-card-featured {
+    border-top: 3px solid var(--color-electric-accent);
+  }
+
+  .calc-card-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  .calc-card-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .calc-category-badge {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-electric-accent);
+    background-color: var(--color-electric-accent-subtle);
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-xs);
+    display: inline-block;
+  }
+
+  .calc-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--color-brand);
+    margin-bottom: 0.65rem;
+    letter-spacing: -0.015em;
+  }
+
+  .calc-title a {
+    color: var(--color-brand);
+    transition: color 0.15s ease;
+  }
+
+  .calc-title a:hover {
+    color: var(--color-electric-accent);
+  }
+
+  .calc-tagline {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+
+  .calc-formula-preview {
+    margin-top: auto;
+    padding-top: 0.85rem;
+    border-top: 1px dashed var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .formula-preview-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .formula-preview-metric {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .calc-card-footer {
+    padding: 0.85rem 1.5rem;
+    background-color: var(--color-surface-subtle);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .calc-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--color-electric-accent);
+    transition: color 0.15s ease;
+  }
+
+  .calc-action-btn:hover {
+    color: var(--color-brand);
+  }
+
+  .btn-arrow {
+    font-size: 1rem;
+    transition: transform 0.15s ease;
+  }
+
+  .calc-action-btn:hover .btn-arrow {
+    transform: translateX(3px);
+  }
+</style>

@@ -1,0 +1,411 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-total-cost-of-ownership-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Lifecycle Financial Parameters</h2>
+        <span class="column-subtitle">Model complete multi-year acquisition and operating expenses</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <div class="split-input-grid">
+          <!-- Acquisition Block -->
+          <div class="param-box">
+            <h3 class="param-box-title">Vehicle Acquisition</h3>
+            <div class="form-row">
+              <label class="form-label" for="purchase-price">Sticker Price</label>
+              <input type="number" id="purchase-price" class="form-input" value="1800000" min="10000" max="50000000" step="10000" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="taxes-fees">Registration & Taxes</label>
+              <input type="number" id="taxes-fees" class="form-input" value="80000" min="0" max="5000000" step="5000" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="finance-interest">Total Financing Interest</label>
+              <input type="number" id="finance-interest" class="form-input" value="0" min="0" max="10000000" step="10000" />
+            </div>
+          </div>
+
+          <!-- Usage & Ownership Block -->
+          <div class="param-box">
+            <h3 class="param-box-title">Usage & Horizon</h3>
+            <div class="form-row">
+              <label class="form-label" for="ownership-years">Ownership Period</label>
+              <select id="ownership-years" class="form-select">
+                <option value="3">3 Years</option>
+                <option value="5" selected>5 Years</option>
+                <option value="7">7 Years</option>
+                <option value="10">10 Years</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="annual-dist">Annual Mileage (km)</label>
+              <input type="number" id="annual-dist" class="form-input" value="15000" min="1000" max="100000" step="1000" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="resale-percent">Expected Resale Value (%)</label>
+              <input type="number" id="resale-percent" class="form-input" value="45" min="0" max="100" step="5" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- Operating & Insurance -->
+        <div class="split-input-grid">
+          <div class="form-row">
+            <label class="form-label" for="ev-efficiency">Efficiency (km/kWh)</label>
+            <input type="number" id="ev-efficiency" class="form-input" value="6.8" min="1" max="25" step="0.1" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="rate">Electricity Rate (per kWh)</label>
+            <input type="number" id="rate" class="form-input" value="8.00" min="0.1" max="100" step="0.25" required />
+          </div>
+        </div>
+
+        <div class="split-input-grid">
+          <div class="form-row">
+            <label class="form-label" for="annual-ins">Annual Insurance</label>
+            <input type="number" id="annual-ins" class="form-input" value="35000" min="0" max="1000000" step="1000" required />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="annual-maint">Annual Maintenance</label>
+            <input type="number" id="annual-maint" class="form-input" value="10000" min="0" max="500000" step="1000" required />
+          </div>
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Net Total Cost of Ownership</span>
+          <span id="res-net-tco" class="primary-result-val">₹1,383,235.29</span>
+          <span id="res-cost-km" class="primary-result-sub">₹18.44 per km (inclusive of depreciation)</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Total Purchase & Taxes:</span>
+            <span id="res-tot-purchase" class="row-val">₹1,880,000.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Total Energy Expenditure:</span>
+            <span id="res-tot-energy" class="row-val">₹88,235.29</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Total Insurance (5 yrs):</span>
+            <span id="res-tot-ins" class="row-val">₹175,000.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Total Maintenance (5 yrs):</span>
+            <span id="res-tot-maint" class="row-val">₹50,000.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Less Resale Value (45%):</span>
+            <span id="res-resale-val" class="row-val text-green">-₹810,000.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Annual Cost of Ownership:</span>
+            <span id="res-annual-cost" class="row-val">₹276,647.06 / yr</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const purchasePrice = document.getElementById('purchase-price');
+    const taxesFees = document.getElementById('taxes-fees');
+    const financeInterest = document.getElementById('finance-interest');
+    const ownershipYears = document.getElementById('ownership-years');
+    const annualDist = document.getElementById('annual-dist');
+    const resalePercent = document.getElementById('resale-percent');
+    const evEfficiency = document.getElementById('ev-efficiency');
+    const rate = document.getElementById('rate');
+    const annualIns = document.getElementById('annual-ins');
+    const annualMaint = document.getElementById('annual-maint');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const resNetTco = document.getElementById('res-net-tco');
+    const resCostKm = document.getElementById('res-cost-km');
+    const resTotPurchase = document.getElementById('res-tot-purchase');
+    const resTotEnergy = document.getElementById('res-tot-energy');
+    const resTotIns = document.getElementById('res-tot-ins');
+    const resTotMaint = document.getElementById('res-tot-maint');
+    const resResaleVal = document.getElementById('res-resale-val');
+    const resAnnualCost = document.getElementById('res-annual-cost');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr) {
+      const sym = currencySymbols[curr] || '₹';
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function calculate() {
+      const price = parseFloat(purchasePrice.value) || 0;
+      const taxes = parseFloat(taxesFees.value) || 0;
+      const interest = parseFloat(financeInterest.value) || 0;
+      const years = parseInt(ownershipYears.value, 10) || 5;
+      const distPerYr = parseFloat(annualDist.value) || 0;
+      const resalePct = parseFloat(resalePercent.value) || 0;
+      const eff = parseFloat(evEfficiency.value) || 1;
+      const r = parseFloat(rate.value) || 0;
+      const insPerYr = parseFloat(annualIns.value) || 0;
+      const maintPerYr = parseFloat(annualMaint.value) || 0;
+      const curr = currencySelect.value || 'INR';
+
+      const totalDist = distPerYr * years;
+      const totalPurchase = price + taxes + interest;
+      const totalEnergy = totalDist * (1 / eff) * r;
+      const totalIns = insPerYr * years;
+      const totalMaint = maintPerYr * years;
+      const resaleVal = price * (resalePct / 100);
+
+      const gross = totalPurchase + totalEnergy + totalIns + totalMaint;
+      const netTco = Math.max(0, gross - resaleVal);
+      const perKm = totalDist > 0 ? netTco / totalDist : 0;
+      const perYear = netTco / years;
+
+      resNetTco.textContent = formatMoney(netTco, curr);
+      resCostKm.textContent = `${formatMoney(perKm, curr)} per km (inclusive of depreciation)`;
+      resTotPurchase.textContent = formatMoney(totalPurchase, curr);
+      resTotEnergy.textContent = formatMoney(totalEnergy, curr);
+      resTotIns.textContent = formatMoney(totalIns, curr);
+      resTotMaint.textContent = formatMoney(totalMaint, curr);
+      resResaleVal.textContent = `-${formatMoney(resaleVal, curr)}`;
+      resAnnualCost.textContent = `${formatMoney(perYear, curr)} / yr`;
+    }
+
+    [
+      currencySelect,
+      purchasePrice,
+      taxesFees,
+      financeInterest,
+      ownershipYears,
+      annualDist,
+      resalePercent,
+      evEfficiency,
+      rate,
+      annualIns,
+      annualMaint,
+    ].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      purchasePrice.value = '1800000';
+      taxesFees.value = '80000';
+      financeInterest.value = '0';
+      ownershipYears.value = '5';
+      annualDist.value = '15000';
+      resalePercent.value = '45';
+      evEfficiency.value = '6.8';
+      rate.value = '8.00';
+      annualIns.value = '35000';
+      annualMaint.value = '10000';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .split-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .param-box {
+    background-color: var(--color-surface-subtle);
+    padding: 1rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .param-box-title {
+    font-size: 0.8125rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-brand);
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .text-green {
+    color: #16a34a !important;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .split-input-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,399 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-charging-cost-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: User Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Charging Parameters</h2>
+        <span class="column-subtitle">Enter your battery specifications & tariff</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <!-- Battery Capacity -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="battery-capacity">Total Battery Capacity</label>
+            <span class="inline-unit-hint">kWh</span>
+          </div>
+          <input
+            type="number"
+            id="battery-capacity"
+            class="form-input"
+            value="40"
+            min="1"
+            max="250"
+            step="0.5"
+            required
+          />
+          <span class="field-hint">e.g. 40 kWh for compact SUV, 60–80 kWh for long range</span>
+        </div>
+
+        <!-- State of Charge (SOC) Range -->
+        <div class="soc-slider-group">
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="current-soc">Starting State of Charge (SOC)</label>
+              <span id="current-soc-val" class="live-slider-val">20%</span>
+            </div>
+            <input type="range" id="current-soc" min="0" max="95" value="20" step="5" class="form-slider" />
+          </div>
+
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="target-soc">Target State of Charge (SOC)</label>
+              <span id="target-soc-val" class="live-slider-val">80%</span>
+            </div>
+            <input type="range" id="target-soc" min="5" max="100" value="80" step="5" class="form-slider" />
+          </div>
+        </div>
+
+        <!-- Charging Efficiency -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="efficiency">Charging Efficiency</label>
+            <span id="efficiency-val" class="live-slider-val">90%</span>
+          </div>
+          <input type="range" id="efficiency" min="70" max="98" value="90" step="1" class="form-slider" />
+          <span class="field-hint">Accounts for AC/DC conversion heat loss (Typical: 88%–92%)</span>
+        </div>
+
+        <!-- Electricity Tariff -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="rate">Electricity Tariff Rate (per kWh)</label>
+            <span id="rate-symbol" class="inline-unit-hint">₹ / kWh</span>
+          </div>
+          <input
+            type="number"
+            id="rate"
+            class="form-input"
+            value="8.00"
+            min="0"
+            max="100"
+            step="0.25"
+            required
+          />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Live Computed Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Estimated Charging Cost</span>
+          <span id="res-total-cost" class="primary-result-val">₹213.33</span>
+          <span id="res-unit-cost" class="primary-result-sub">₹8.89 per kWh added to pack</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Battery Energy Added:</span>
+            <span id="res-battery-added" class="row-val">24.00 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Grid Energy Drawn:</span>
+            <span id="res-grid-drawn" class="row-val">26.67 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Energy Loss (Thermal):</span>
+            <span id="res-loss" class="row-val">2.67 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">SOC Delta:</span>
+            <span id="res-soc-delta" class="row-val">+60%</span>
+          </div>
+        </div>
+
+        <div class="results-note">
+          <span class="note-icon">💡</span>
+          <p>Charging between 20% and 80% is optimal for preserving long-term lithium-ion battery health.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const batteryCapacity = document.getElementById('battery-capacity');
+    const currentSoc = document.getElementById('current-soc');
+    const targetSoc = document.getElementById('target-soc');
+    const efficiency = document.getElementById('efficiency');
+    const rate = document.getElementById('rate');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const currentSocVal = document.getElementById('current-soc-val');
+    const targetSocVal = document.getElementById('target-soc-val');
+    const efficiencyVal = document.getElementById('efficiency-val');
+    const rateSymbol = document.getElementById('rate-symbol');
+
+    const resTotalCost = document.getElementById('res-total-cost');
+    const resUnitCost = document.getElementById('res-unit-cost');
+    const resBatteryAdded = document.getElementById('res-battery-added');
+    const resGridDrawn = document.getElementById('res-grid-drawn');
+    const resLoss = document.getElementById('res-loss');
+    const resSocDelta = document.getElementById('res-soc-delta');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr) {
+      const sym = currencySymbols[curr] || '₹';
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function calculate() {
+      let cap = parseFloat(batteryCapacity.value) || 0;
+      let cSoc = parseFloat(currentSoc.value) || 0;
+      let tSoc = parseFloat(targetSoc.value) || 0;
+      let eff = parseFloat(efficiency.value) || 90;
+      let r = parseFloat(rate.value) || 0;
+      const curr = currencySelect.value || 'INR';
+
+      // Ensure Target >= Current
+      if (tSoc < cSoc) {
+        tSoc = cSoc;
+        targetSoc.value = cSoc;
+      }
+
+      currentSocVal.textContent = `${cSoc}%`;
+      targetSocVal.textContent = `${tSoc}%`;
+      efficiencyVal.textContent = `${eff}%`;
+      rateSymbol.textContent = `${currencySymbols[curr] || '₹'} / kWh`;
+
+      const socDelta = tSoc - cSoc;
+      const batteryAdded = (cap * socDelta) / 100;
+      const effFactor = eff / 100;
+      const gridDrawn = effFactor > 0 ? batteryAdded / effFactor : 0;
+      const totalCost = gridDrawn * r;
+      const loss = Math.max(0, gridDrawn - batteryAdded);
+      const costPerAddedKwh = batteryAdded > 0 ? totalCost / batteryAdded : 0;
+
+      resTotalCost.textContent = formatMoney(totalCost, curr);
+      resUnitCost.textContent = `${formatMoney(costPerAddedKwh, curr)} per kWh added to pack`;
+      resBatteryAdded.textContent = `${batteryAdded.toFixed(2)} kWh`;
+      resGridDrawn.textContent = `${gridDrawn.toFixed(2)} kWh`;
+      resLoss.textContent = `${loss.toFixed(2)} kWh`;
+      resSocDelta.textContent = `+${socDelta}%`;
+    }
+
+    // Bind listeners
+    [currencySelect, batteryCapacity, currentSoc, targetSoc, efficiency, rate].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      batteryCapacity.value = '40';
+      currentSoc.value = '20';
+      targetSoc.value = '80';
+      efficiency.value = '90';
+      rate.value = '8.00';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .live-slider-val {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-electric-accent);
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+  }
+
+  .form-slider {
+    width: 100%;
+    accent-color: var(--color-electric-accent);
+    cursor: pointer;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .results-note {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+  }
+</style>

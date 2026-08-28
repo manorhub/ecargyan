@@ -19,12 +19,25 @@ if (dbService) {
         {SITE_CONFIG.name}<span class="brand-dot">.</span>
       </a>
       <p class="footer-bio">
-        Authoritative editorial analysis, electric vehicle architecture benchmarks, battery technology intelligence, and policy reporting.
+        Authoritative editorial analysis, electric vehicle architecture benchmarks, battery technology intelligence, and deterministic EV financial tools.
       </p>
       <div class="footer-badge-line">
         <span class="status-indicator"></span>
         <span class="status-text">Independent EV Journalism</span>
       </div>
+    </div>
+
+    <!-- Calculators Column -->
+    <div class="footer-col">
+      <h4 class="col-title">EV Calculators</h4>
+      <ul class="col-links">
+        <li><a href="/calculators">All 12 Calculators</a></li>
+        <li><a href="/calculators/ev-charging-cost-calculator">Charging Cost</a></li>
+        <li><a href="/calculators/ev-running-cost-calculator">Running Cost</a></li>
+        <li><a href="/calculators/ev-vs-petrol-cost-calculator">EV vs Petrol</a></li>
+        <li><a href="/calculators/ev-total-cost-of-ownership-calculator">TCO Model</a></li>
+        <li><a href="/calculators/ev-range-calculator">Range Calculator</a></li>
+      </ul>
     </div>
 
     <!-- Categories Directory -->
@@ -41,20 +54,13 @@ if (dbService) {
       </div>
     )}
 
-    <!-- Publication Info -->
+    <!-- Publication Info & Governance -->
     <div class="footer-col">
       <h4 class="col-title">Publication</h4>
       <ul class="col-links">
         <li><a href="/about">About ECargyan</a></li>
         <li><a href="/contact">Editorial Desk</a></li>
         <li><a href="/search">Search Archive</a></li>
-      </ul>
-    </div>
-
-    <!-- Governance -->
-    <div class="footer-col">
-      <h4 class="col-title">Standards</h4>
-      <ul class="col-links">
         <li><a href="/privacy">Privacy Policy</a></li>
         <li><a href="/terms">Terms of Publication</a></li>
       </ul>
@@ -66,6 +72,8 @@ if (dbService) {
       &copy; {currentYear} {SITE_CONFIG.name}. Electric Vehicle Editorial Network. All rights reserved.
     </p>
     <div class="footer-bottom-links">
+      <a href="/calculators">Calculators</a>
+      <span aria-hidden="true">&bull;</span>
       <a href="/about">About</a>
       <span aria-hidden="true">&bull;</span>
       <a href="/privacy">Privacy</a>
@@ -86,8 +94,8 @@ if (dbService) {
 
   .footer-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
-    gap: 3rem;
+    grid-template-columns: 1.6fr 1fr 1fr 1fr;
+    gap: 2.5rem;
     padding-bottom: 2.5rem;
     border-bottom: 1px solid var(--color-border-subtle);
   }
@@ -113,7 +121,7 @@ if (dbService) {
   .footer-bio {
     color: var(--color-text-secondary);
     line-height: 1.6;
-    max-width: 360px;
+    max-width: 320px;
     font-size: 0.875rem;
   }
 
@@ -150,7 +158,7 @@ if (dbService) {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.55rem;
   }
 
   .col-links a {
@@ -182,7 +190,7 @@ if (dbService) {
     color: var(--color-text-main);
   }
 
-  @media (max-width: 860px) {
+  @media (max-width: 960px) {
     .footer-grid {
       grid-template-columns: 1fr 1fr;
       gap: 2rem;
@@ -193,7 +201,7 @@ if (dbService) {
     }
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 520px) {
     .footer-grid {
       grid-template-columns: 1fr;
       gap: 2rem;

@@ -11,6 +11,8 @@
     "astro": "astro",
     "db:migrate:local": "wrangler d1 migrations apply ecargyan-db --local",
     "db:migrate:prod": "wrangler d1 migrations apply ecargyan-db --remote",
+    "test": "node --experimental-strip-types tests/calculators/test-engines.mjs",
+    "test:calculators": "node --experimental-strip-types tests/calculators/test-engines.mjs",
     "typecheck": "astro check"
   },
   "dependencies": {

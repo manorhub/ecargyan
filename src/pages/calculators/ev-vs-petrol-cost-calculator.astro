@@ -1,0 +1,401 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-vs-petrol-cost-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Comparison Parameters</h2>
+        <span class="column-subtitle">Benchmark electric vs internal combustion</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <div class="split-input-grid">
+          <!-- Petrol Vehicle Block -->
+          <div class="param-box">
+            <h3 class="param-box-title">Petrol Vehicle</h3>
+            <div class="form-row">
+              <label class="form-label" for="petrol-price">Petrol Price (per Litre)</label>
+              <input type="number" id="petrol-price" class="form-input" value="102.00" min="1" max="500" step="0.5" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="petrol-mileage">Petrol Mileage (km/L)</label>
+              <input type="number" id="petrol-mileage" class="form-input" value="14.0" min="1" max="50" step="0.5" required />
+            </div>
+          </div>
+
+          <!-- Electric Vehicle Block -->
+          <div class="param-box">
+            <h3 class="param-box-title">Electric Vehicle</h3>
+            <div class="form-row">
+              <label class="form-label" for="ev-rate">Electricity Rate (per kWh)</label>
+              <input type="number" id="ev-rate" class="form-input" value="8.00" min="0.1" max="100" step="0.25" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="ev-eff">EV Efficiency (km/kWh)</label>
+              <input type="number" id="ev-eff" class="form-input" value="7.0" min="1" max="25" step="0.1" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly Commute Distance -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="monthly-dist">Monthly Commute Distance (km)</label>
+            <span class="inline-unit-hint">km / month</span>
+          </div>
+          <input
+            type="number"
+            id="monthly-dist"
+            class="form-input"
+            value="1500"
+            min="10"
+            max="50000"
+            step="50"
+            required
+          />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Live Computed Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Monthly Operational Savings</span>
+          <span id="res-monthly-savings" class="primary-result-val">₹9,214.29</span>
+          <span id="res-savings-percent" class="primary-result-sub">84.3% cheaper than petrol</span>
+        </div>
+
+        <!-- Comparative Side-by-Side Strip -->
+        <div class="side-by-side-comparison">
+          <div class="comparison-card petrol-card">
+            <span class="comp-tag">Petrol Engine</span>
+            <span id="res-petrol-per-km" class="comp-val">₹7.29 / km</span>
+            <span id="res-petrol-monthly" class="comp-sub">₹10,928.57 / mo</span>
+          </div>
+          <div class="comparison-card ev-card">
+            <span class="comp-tag">Electric Vehicle</span>
+            <span id="res-ev-per-km" class="comp-val">₹1.14 / km</span>
+            <span id="res-ev-monthly" class="comp-sub">₹1,714.29 / mo</span>
+          </div>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Cost Differential per km:</span>
+            <span id="res-diff-km" class="row-val">₹6.14 / km</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Annual Fuel Savings:</span>
+            <span id="res-annual-savings" class="row-val">₹110,571.43</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">5-Year Fuel Savings:</span>
+            <span id="res-5yr-savings" class="row-val">₹552,857.14</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const petrolPrice = document.getElementById('petrol-price');
+    const petrolMileage = document.getElementById('petrol-mileage');
+    const evRate = document.getElementById('ev-rate');
+    const evEff = document.getElementById('ev-eff');
+    const monthlyDist = document.getElementById('monthly-dist');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const resMonthlySavings = document.getElementById('res-monthly-savings');
+    const resSavingsPercent = document.getElementById('res-savings-percent');
+    const resPetrolPerKm = document.getElementById('res-petrol-per-km');
+    const resPetrolMonthly = document.getElementById('res-petrol-monthly');
+    const resEvPerKm = document.getElementById('res-ev-per-km');
+    const resEvMonthly = document.getElementById('res-ev-monthly');
+    const resDiffKm = document.getElementById('res-diff-km');
+    const resAnnualSavings = document.getElementById('res-annual-savings');
+    const res5yrSavings = document.getElementById('res-5yr-savings');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr) {
+      const sym = currencySymbols[curr] || '₹';
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function calculate() {
+      const pPrice = parseFloat(petrolPrice.value) || 0;
+      const pMileage = parseFloat(petrolMileage.value) || 1;
+      const eRate = parseFloat(evRate.value) || 0;
+      const eEfficiency = parseFloat(evEff.value) || 1;
+      const dist = parseFloat(monthlyDist.value) || 0;
+      const curr = currencySelect.value || 'INR';
+
+      const petrolPerKm = pPrice / pMileage;
+      const evPerKm = (1 / eEfficiency) * eRate;
+      const diffPerKm = petrolPerKm - evPerKm;
+      const savingsPercent = petrolPerKm > 0 ? (diffPerKm / petrolPerKm) * 100 : 0;
+
+      const monthlyPetrol = petrolPerKm * dist;
+      const monthlyEv = evPerKm * dist;
+      const monthlySavings = monthlyPetrol - monthlyEv;
+      const annualSavings = monthlySavings * 12;
+      const fiveYearSavings = annualSavings * 5;
+
+      resMonthlySavings.textContent = formatMoney(monthlySavings, curr);
+      resSavingsPercent.textContent = `${savingsPercent.toFixed(1)}% cheaper than petrol`;
+      resPetrolPerKm.textContent = `${formatMoney(petrolPerKm, curr)} / km`;
+      resPetrolMonthly.textContent = `${formatMoney(monthlyPetrol, curr)} / mo`;
+      resEvPerKm.textContent = `${formatMoney(evPerKm, curr)} / km`;
+      resEvMonthly.textContent = `${formatMoney(monthlyEv, curr)} / mo`;
+      resDiffKm.textContent = `${formatMoney(diffPerKm, curr)} / km`;
+      resAnnualSavings.textContent = formatMoney(annualSavings, curr);
+      res5yrSavings.textContent = formatMoney(fiveYearSavings, curr);
+    }
+
+    [currencySelect, petrolPrice, petrolMileage, evRate, evEff, monthlyDist].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      petrolPrice.value = '102.00';
+      petrolMileage.value = '14.0';
+      evRate.value = '8.00';
+      evEff.value = '7.0';
+      monthlyDist.value = '1500';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .split-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .param-box {
+    background-color: var(--color-surface-subtle);
+    padding: 1rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .param-box-title {
+    font-size: 0.8125rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-brand);
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #34d399;
+    font-weight: 600;
+  }
+
+  .side-by-side-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+  }
+
+  .comparison-card {
+    padding: 1rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .petrol-card {
+    background-color: #fff1f2;
+    border: 1px solid #fecdd3;
+  }
+
+  .ev-card {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+  }
+
+  .comp-tag {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+  }
+
+  .comp-val {
+    font-size: 1.1rem;
+    font-weight: 800;
+    font-family: var(--font-display);
+    color: var(--color-brand);
+  }
+
+  .comp-sub {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .split-input-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

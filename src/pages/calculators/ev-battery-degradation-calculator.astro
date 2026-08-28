@@ -1,0 +1,379 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-battery-degradation-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Battery Pack & Age Inputs</h2>
+        <span class="column-subtitle">Model State of Health (SOH) retention</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Initial Battery Capacity -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="initial-capacity">Initial Battery Capacity (Day 1)</label>
+            <span class="inline-unit-hint">kWh</span>
+          </div>
+          <input type="number" id="initial-capacity" class="form-input" value="50" min="5" max="250" step="0.5" required />
+          <span class="field-hint">Factory nameplate usable capacity</span>
+        </div>
+
+        <!-- Annual Degradation Rate -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="degradation-rate">Annual Degradation Rate</label>
+            <span id="degradation-val" class="live-slider-val">1.8% / yr</span>
+          </div>
+          <input type="range" id="degradation-rate" min="0.5" max="5.0" value="1.8" step="0.1" class="form-slider" />
+          <span class="field-hint">Fleet empirical average: 1.5%–2.2% annually for liquid-cooled packs</span>
+        </div>
+
+        <!-- Ownership Horizon -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="years-horizon">Ownership Horizon</label>
+            <span id="years-val" class="live-slider-val">8 Years</span>
+          </div>
+          <input type="range" id="years-horizon" min="1" max="20" value="8" step="1" class="form-slider" />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Projected Capacity Retention</span>
+          <span id="res-retained-cap" class="primary-result-val">43.24 kWh</span>
+          <span id="res-soh-percent" class="primary-result-sub">86.5% State of Health (SOH)</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Initial Pack Capacity:</span>
+            <span id="res-init-cap" class="row-val">50.00 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Cumulative Capacity Lost:</span>
+            <span id="res-lost-cap" class="row-val">6.76 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Warranty Threshold (70%):</span>
+            <span id="res-warranty-status" class="row-val status-healthy">Healthy (&gt;70%)</span>
+          </div>
+        </div>
+
+        <!-- Yearly Trajectory Mini Table -->
+        <div class="yearly-table-wrap">
+          <span class="yearly-title">Year-by-Year Degradation Trajectory</span>
+          <div class="yearly-grid" id="yearly-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const initialCapacity = document.getElementById('initial-capacity');
+    const degradationRate = document.getElementById('degradation-rate');
+    const yearsHorizon = document.getElementById('years-horizon');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const degradationVal = document.getElementById('degradation-val');
+    const yearsVal = document.getElementById('years-val');
+
+    const resRetainedCap = document.getElementById('res-retained-cap');
+    const resSohPercent = document.getElementById('res-soh-percent');
+    const resInitCap = document.getElementById('res-init-cap');
+    const resLostCap = document.getElementById('res-lost-cap');
+    const resWarrantyStatus = document.getElementById('res-warranty-status');
+    const yearlyGrid = document.getElementById('yearly-grid');
+
+    function calculate() {
+      const initCap = parseFloat(initialCapacity.value) || 0;
+      const rate = parseFloat(degradationRate.value) || 1.8;
+      const years = parseInt(yearsHorizon.value, 10) || 8;
+
+      degradationVal.textContent = `${rate.toFixed(1)}% / yr`;
+      yearsVal.textContent = `${years} ${years === 1 ? 'Year' : 'Years'}`;
+
+      if (initCap <= 0 || years <= 0) {
+        resRetainedCap.textContent = '0 kWh';
+        resSohPercent.textContent = '0%';
+        resInitCap.textContent = '0 kWh';
+        resLostCap.textContent = '0 kWh';
+        yearlyGrid.innerHTML = '';
+        return;
+      }
+
+      const decayFactor = 1 - rate / 100;
+      let currentCap = initCap;
+      let gridHtml = '';
+
+      for (let y = 1; y <= years; y++) {
+        currentCap *= decayFactor;
+        const retention = (currentCap / initCap) * 100;
+        gridHtml += `
+          <div class="year-cell">
+            <span class="yr-num">Yr ${y}</span>
+            <span class="yr-kwh">${currentCap.toFixed(1)} kWh</span>
+            <span class="yr-pct">${retention.toFixed(1)}%</span>
+          </div>
+        `;
+      }
+
+      yearlyGrid.innerHTML = gridHtml;
+
+      const finalRetention = (currentCap / initCap) * 100;
+      const lostCap = initCap - currentCap;
+
+      resRetainedCap.textContent = `${currentCap.toFixed(2)} kWh`;
+      resSohPercent.textContent = `${finalRetention.toFixed(1)}% State of Health (SOH)`;
+      resInitCap.textContent = `${initCap.toFixed(2)} kWh`;
+      resLostCap.textContent = `${lostCap.toFixed(2)} kWh`;
+
+      if (finalRetention >= 70) {
+        resWarrantyStatus.textContent = 'Healthy (>70%)';
+        resWarrantyStatus.className = 'row-val status-healthy';
+      } else {
+        resWarrantyStatus.textContent = 'Under Warranty Threshold (<70%)';
+        resWarrantyStatus.className = 'row-val status-warn';
+      }
+    }
+
+    [initialCapacity, degradationRate, yearsHorizon].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      initialCapacity.value = '50';
+      degradationRate.value = '1.8';
+      yearsHorizon.value = '8';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .live-slider-val {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-electric-accent);
+  }
+
+  .form-slider {
+    width: 100%;
+    accent-color: var(--color-electric-accent);
+    cursor: pointer;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #34d399;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .status-healthy {
+    color: #16a34a !important;
+  }
+
+  .status-warn {
+    color: #dc2626 !important;
+  }
+
+  /* Yearly Table */
+  .yearly-table-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .yearly-title {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .yearly-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 0.5rem;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  :global(.year-cell) {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    padding: 0.5rem 0.4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+
+  :global(.yr-num) {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+  }
+
+  :global(.yr-kwh) {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  :global(.yr-pct) {
+    font-size: 0.6875rem;
+    font-family: var(--font-mono);
+    color: var(--color-electric-accent);
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

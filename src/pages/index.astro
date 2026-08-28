@@ -1,11 +1,13 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ArticleCard from '../components/ui/ArticleCard.astro';
+import CalculatorCard from '../components/calculators/CalculatorCard.astro';
 import EmptyState from '../components/ui/EmptyState.astro';
 import JsonLd from '../components/ui/JsonLd.astro';
 import { SITE_CONFIG } from '../lib/config/site';
 import { getDb } from '../lib/db/client';
 import { generateWebSiteJsonLd } from '../lib/utils/json-ld';
+import { CALCULATOR_REGISTRY } from '../lib/calculators/registry.ts';
 import type { ArticleWithRelations, CategoryRecord } from '../lib/db/schema';
 
 const runtimeEnv = Astro.locals.runtime?.env;
@@ -44,6 +46,13 @@ if (dbService) {
 
   categoriesWithArticles = activeCategories.filter((c: CategoryRecord) => ((c as any).article_count || 0) > 0);
 }
+
+const featuredCalculators = [
+  CALCULATOR_REGISTRY['ev-charging-cost-calculator'],
+  CALCULATOR_REGISTRY['ev-vs-petrol-cost-calculator'],
+  CALCULATOR_REGISTRY['ev-running-cost-calculator'],
+  CALCULATOR_REGISTRY['ev-total-cost-of-ownership-calculator'],
+].filter(Boolean);
 
 const websiteSchema = generateWebSiteJsonLd();
 ---
@@ -139,7 +148,21 @@ const websiteSchema = generateWebSiteJsonLd();
           </section>
         )}
 
-        <!-- 4. Editorial Briefing Callout -->
+        <!-- 4. Featured EV Calculators Block -->
+        <section class="featured-calculators-section" aria-label="EV Calculators">
+          <div class="section-header">
+            <h2 class="section-title">EV Calculators &amp; Financial Tools</h2>
+            <a href="/calculators" class="section-link">View All 12 Tools &rarr;</a>
+          </div>
+
+          <div class="calculators-home-grid">
+            {featuredCalculators.map((calc) => (
+              <CalculatorCard calculator={calc} />
+            ))}
+          </div>
+        </section>
+
+        <!-- 5. Editorial Briefing Callout -->
         <section class="briefing-box">
           <div class="briefing-content">
             <span class="briefing-tag">Editorial Mission</span>
@@ -347,7 +370,18 @@ const websiteSchema = generateWebSiteJsonLd();
     color: var(--color-electric-accent);
   }
 
-  /* 4. Briefing Callout Box */
+  /* 4. Featured Calculators */
+  .featured-calculators-section {
+    margin-bottom: clamp(3rem, 6vw, 4.5rem);
+  }
+
+  .calculators-home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  /* 5. Briefing Callout Box */
   .briefing-box {
     display: flex;
     justify-content: space-between;

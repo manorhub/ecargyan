@@ -1,0 +1,325 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-range-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Battery & Consumption Parameters</h2>
+        <span class="column-subtitle">Estimate real-world driving range</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Battery Capacity -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="gross-capacity">Gross Battery Pack Capacity</label>
+            <span class="inline-unit-hint">kWh</span>
+          </div>
+          <input type="number" id="gross-capacity" class="form-input" value="60" min="5" max="250" step="0.5" required />
+          <span class="field-hint">e.g. 60 kWh gross physical cell capacity</span>
+        </div>
+
+        <!-- Usable Buffer Percentage -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="usable-buffer">Net Usable Buffer</label>
+            <span id="usable-buffer-val" class="live-slider-val">95%</span>
+          </div>
+          <input type="range" id="usable-buffer" min="80" max="100" value="95" step="1" class="form-slider" />
+          <span class="field-hint">Manufacturers reserve 5%–10% top/bottom buffers for longevity (Default: 95%)</span>
+        </div>
+
+        <!-- Efficiency Input with Unit Selector -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="efficiency-input">Vehicle Efficiency</label>
+            <select id="efficiency-unit" class="unit-mini-select">
+              <option value="km/kWh" selected>km/kWh</option>
+              <option value="Wh/km">Wh/km</option>
+              <option value="kWh/100km">kWh/100km</option>
+              <option value="mi/kWh">mi/kWh</option>
+            </select>
+          </div>
+          <input type="number" id="efficiency-input" class="form-input" value="6.5" min="0.1" max="1000" step="0.1" required />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Estimated Driving Range</span>
+          <span id="res-range-km" class="primary-result-val">370.5 km</span>
+          <span id="res-range-miles" class="primary-result-sub">230.2 miles</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Gross Pack Capacity:</span>
+            <span id="res-gross-cap" class="row-val">60.00 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Net Usable Capacity:</span>
+            <span id="res-usable-cap" class="row-val">57.00 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Normalized Efficiency:</span>
+            <span id="res-norm-eff" class="row-val">6.50 km/kWh</span>
+          </div>
+        </div>
+
+        <div class="results-note">
+          <span class="note-icon">🔋</span>
+          <p>Real-world highway driving at 100+ km/h will typically deliver 15%–20% less range than urban stop-and-go driving with regenerative braking.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const grossCapacity = document.getElementById('gross-capacity');
+    const usableBuffer = document.getElementById('usable-buffer');
+    const efficiencyInput = document.getElementById('efficiency-input');
+    const efficiencyUnit = document.getElementById('efficiency-unit');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const usableBufferVal = document.getElementById('usable-buffer-val');
+    const resRangeKm = document.getElementById('res-range-km');
+    const resRangeMiles = document.getElementById('res-range-miles');
+    const resGrossCap = document.getElementById('res-gross-cap');
+    const resUsableCap = document.getElementById('res-usable-cap');
+    const resNormEff = document.getElementById('res-norm-eff');
+
+    function toKmPerKwh(val, unit) {
+      if (val <= 0) return 0;
+      if (unit === 'km/kWh') return val;
+      if (unit === 'Wh/km') return 1000 / val;
+      if (unit === 'kWh/100km') return 100 / val;
+      if (unit === 'mi/kWh') return val * 1.60934;
+      return val;
+    }
+
+    function calculate() {
+      const gross = parseFloat(grossCapacity.value) || 0;
+      const buffer = parseFloat(usableBuffer.value) || 95;
+      const effVal = parseFloat(efficiencyInput.value) || 0;
+      const unit = efficiencyUnit.value || 'km/kWh';
+
+      usableBufferVal.textContent = `${buffer}%`;
+
+      const usableKwh = (gross * buffer) / 100;
+      const kmPerKwh = toKmPerKwh(effVal, unit);
+      const rangeKm = usableKwh * kmPerKwh;
+      const rangeMiles = rangeKm * 0.621371;
+
+      resRangeKm.textContent = `${rangeKm.toFixed(1)} km`;
+      resRangeMiles.textContent = `${rangeMiles.toFixed(1)} miles`;
+      resGrossCap.textContent = `${gross.toFixed(2)} kWh`;
+      resUsableCap.textContent = `${usableKwh.toFixed(2)} kWh`;
+      resNormEff.textContent = `${kmPerKwh.toFixed(2)} km/kWh`;
+    }
+
+    efficiencyUnit.addEventListener('change', () => {
+      const u = efficiencyUnit.value;
+      if (u === 'km/kWh') efficiencyInput.value = '6.5';
+      else if (u === 'Wh/km') efficiencyInput.value = '154';
+      else if (u === 'kWh/100km') efficiencyInput.value = '15.4';
+      else if (u === 'mi/kWh') efficiencyInput.value = '4.0';
+      calculate();
+    });
+
+    [grossCapacity, usableBuffer, efficiencyInput].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      grossCapacity.value = '60';
+      usableBuffer.value = '95';
+      efficiencyUnit.value = 'km/kWh';
+      efficiencyInput.value = '6.5';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .unit-mini-select {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-secondary);
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .live-slider-val {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-electric-accent);
+  }
+
+  .form-slider {
+    width: 100%;
+    accent-color: var(--color-electric-accent);
+    cursor: pointer;
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .results-note {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

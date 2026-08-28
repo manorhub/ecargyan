@@ -65,6 +65,11 @@ if (dbService) {
           </li>
         ))}
         <li>
+          <a href="/calculators" class:list={['nav-item', { active: currentPath.startsWith('/calculators') }]}>
+            Calculators
+          </a>
+        </li>
+        <li>
           <a href="/about" class:list={['nav-item', { active: currentPath === '/about' }]}>
             About
           </a>

@@ -1,0 +1,422 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-savings-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Savings Model Inputs</h2>
+        <span class="column-subtitle">Forecast cumulative 1, 3, and 5-year savings</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <!-- Monthly Commute Distance -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="monthly-dist">Monthly Commute Distance (km)</label>
+            <span class="inline-unit-hint">km / month</span>
+          </div>
+          <input type="number" id="monthly-dist" class="form-input" value="2000" min="50" max="50000" step="50" required />
+        </div>
+
+        <div class="split-input-grid">
+          <!-- Petrol Vehicle -->
+          <div class="param-box">
+            <h3 class="param-box-title">Petrol Baseline</h3>
+            <div class="form-row">
+              <label class="form-label" for="petrol-price">Petrol Price (per L)</label>
+              <input type="number" id="petrol-price" class="form-input" value="104.00" min="1" max="500" step="0.5" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="petrol-mileage">Mileage (km/L)</label>
+              <input type="number" id="petrol-mileage" class="form-input" value="15.0" min="1" max="50" step="0.5" required />
+            </div>
+          </div>
+
+          <!-- Electric Vehicle -->
+          <div class="param-box">
+            <h3 class="param-box-title">EV Parameters</h3>
+            <div class="form-row">
+              <label class="form-label" for="ev-rate">EV Rate (per kWh)</label>
+              <input type="number" id="ev-rate" class="form-input" value="8.00" min="0.1" max="100" step="0.25" required />
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="ev-eff">Efficiency (km/kWh)</label>
+              <input type="number" id="ev-eff" class="form-input" value="7.0" min="1" max="25" step="0.1" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- Maintenance Savings -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="maint-saving">Annual Scheduled Maintenance Savings</label>
+            <span id="maint-symbol" class="inline-unit-hint">₹ / year</span>
+          </div>
+          <input type="number" id="maint-saving" class="form-input" value="12000" min="0" max="500000" step="1000" required />
+          <span class="field-hint">No engine oil, spark plugs, clutch, or filter replacements (Typical: ₹10,000–₹15,000/yr)</span>
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Projected Annual Savings</span>
+          <span id="res-annual-savings" class="primary-result-val">₹150,971.43</span>
+          <span id="res-monthly-savings" class="primary-result-sub">₹11,580.95 net fuel savings per month</span>
+        </div>
+
+        <div class="multi-year-grid">
+          <div class="year-stat-card">
+            <span class="stat-yr-label">1-Year Savings</span>
+            <span id="res-1yr" class="stat-yr-val">₹1.51 Lakh</span>
+          </div>
+          <div class="year-stat-card">
+            <span class="stat-yr-label">3-Year Savings</span>
+            <span id="res-3yr" class="stat-yr-val">₹4.53 Lakh</span>
+          </div>
+          <div class="year-stat-card highlight-stat-card">
+            <span class="stat-yr-label">5-Year Savings</span>
+            <span id="res-5yr" class="stat-yr-val">₹7.55 Lakh</span>
+          </div>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Monthly Petrol Cost:</span>
+            <span id="res-petrol-cost" class="row-val">₹13,866.67</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Monthly EV Electricity:</span>
+            <span id="res-ev-cost" class="row-val">₹2,285.71</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Annual Maintenance Bonus:</span>
+            <span id="res-maint-bonus" class="row-val">+₹12,000.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const monthlyDist = document.getElementById('monthly-dist');
+    const petrolPrice = document.getElementById('petrol-price');
+    const petrolMileage = document.getElementById('petrol-mileage');
+    const evRate = document.getElementById('ev-rate');
+    const evEff = document.getElementById('ev-eff');
+    const maintSaving = document.getElementById('maint-saving');
+    const resetBtn = document.getElementById('reset-btn');
+    const maintSymbol = document.getElementById('maint-symbol');
+
+    const resAnnualSavings = document.getElementById('res-annual-savings');
+    const resMonthlySavings = document.getElementById('res-monthly-savings');
+    const res1yr = document.getElementById('res-1yr');
+    const res3yr = document.getElementById('res-3yr');
+    const res5yr = document.getElementById('res-5yr');
+    const resPetrolCost = document.getElementById('res-petrol-cost');
+    const resEvCost = document.getElementById('res-ev-cost');
+    const resMaintBonus = document.getElementById('res-maint-bonus');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr, compact = false) {
+      const sym = currencySymbols[curr] || '₹';
+      if (compact && curr === 'INR' && amount >= 100000) {
+        return `${sym}${(amount / 100000).toFixed(2)} Lakh`;
+      } else if (compact && amount >= 1000000) {
+        return `${sym}${(amount / 1000000).toFixed(2)}M`;
+      } else if (compact && amount >= 1000) {
+        return `${sym}${(amount / 1000).toFixed(1)}k`;
+      }
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function calculate() {
+      const dist = parseFloat(monthlyDist.value) || 0;
+      const pPrice = parseFloat(petrolPrice.value) || 0;
+      const pMileage = parseFloat(petrolMileage.value) || 1;
+      const eRate = parseFloat(evRate.value) || 0;
+      const eEff = parseFloat(evEff.value) || 1;
+      const maint = parseFloat(maintSaving.value) || 0;
+      const curr = currencySelect.value || 'INR';
+
+      maintSymbol.textContent = `${currencySymbols[curr] || '₹'} / year`;
+
+      const monthlyPetrol = (dist / pMileage) * pPrice;
+      const monthlyEv = (dist / eEff) * eRate;
+      const monthlySavings = monthlyPetrol - monthlyEv;
+      const annualSavings = monthlySavings * 12 + maint;
+      const threeYrSavings = annualSavings * 3;
+      const fiveYrSavings = annualSavings * 5;
+
+      resAnnualSavings.textContent = formatMoney(annualSavings, curr);
+      resMonthlySavings.textContent = `${formatMoney(monthlySavings, curr)} net fuel savings per month`;
+      res1yr.textContent = formatMoney(annualSavings, curr, true);
+      res3yr.textContent = formatMoney(threeYrSavings, curr, true);
+      res5yr.textContent = formatMoney(fiveYrSavings, curr, true);
+      resPetrolCost.textContent = formatMoney(monthlyPetrol, curr);
+      resEvCost.textContent = formatMoney(monthlyEv, curr);
+      resMaintBonus.textContent = `+${formatMoney(maint, curr)}`;
+    }
+
+    [currencySelect, monthlyDist, petrolPrice, petrolMileage, evRate, evEff, maintSaving].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      monthlyDist.value = '2000';
+      petrolPrice.value = '104.00';
+      petrolMileage.value = '15.0';
+      evRate.value = '8.00';
+      evEff.value = '7.0';
+      maintSaving.value = '12000';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .split-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .param-box {
+    background-color: var(--color-surface-subtle);
+    padding: 1rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .param-box-title {
+    font-size: 0.8125rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-brand);
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #34d399;
+  }
+
+  .multi-year-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.65rem;
+  }
+
+  .year-stat-card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    padding: 0.85rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .highlight-stat-card {
+    border-color: var(--color-electric-accent);
+    background-color: var(--color-electric-accent-subtle);
+  }
+
+  .stat-yr-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+  }
+
+  .stat-yr-val {
+    font-size: 1rem;
+    font-weight: 800;
+    font-family: var(--font-display);
+    color: var(--color-brand);
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .split-input-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .multi-year-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

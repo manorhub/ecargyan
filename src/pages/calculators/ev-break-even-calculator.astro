@@ -1,0 +1,358 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-break-even-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Price Premium & Fuel Differential</h2>
+        <span class="column-subtitle">Calculate payback mileage and recovery horizon</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <div class="split-input-grid">
+          <!-- EV Price -->
+          <div class="form-row">
+            <label class="form-label" for="ev-price">EV Purchase Price</label>
+            <input type="number" id="ev-price" class="form-input" value="1500000" min="10000" max="50000000" step="10000" required />
+          </div>
+          <!-- Petrol Price -->
+          <div class="form-row">
+            <label class="form-label" for="petrol-price">Petrol Car Price</label>
+            <input type="number" id="petrol-price" class="form-input" value="1200000" min="10000" max="50000000" step="10000" required />
+          </div>
+        </div>
+
+        <div class="split-input-grid">
+          <!-- EV Running Cost -->
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="ev-cost-km">EV Cost per km</label>
+              <span id="ev-cost-sym" class="inline-unit-hint">₹ / km</span>
+            </div>
+            <input type="number" id="ev-cost-km" class="form-input" value="1.20" min="0.1" max="50" step="0.1" required />
+          </div>
+          <!-- Petrol Running Cost -->
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="petrol-cost-km">Petrol Cost per km</label>
+              <span id="petrol-cost-sym" class="inline-unit-hint">₹ / km</span>
+            </div>
+            <input type="number" id="petrol-cost-km" class="form-input" value="6.70" min="0.5" max="100" step="0.1" required />
+          </div>
+        </div>
+
+        <!-- Annual Driving Distance -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="annual-dist">Annual Driving Distance (km)</label>
+            <span class="inline-unit-hint">km / year</span>
+          </div>
+          <input type="number" id="annual-dist" class="form-input" value="15000" min="1000" max="150000" step="1000" required />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Break-Even Distance</span>
+          <span id="res-be-dist" class="primary-result-val">54,545 km</span>
+          <span id="res-be-time" class="primary-result-sub">Approx. 3.6 years (43.6 months)</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Initial Purchase Premium:</span>
+            <span id="res-premium" class="row-val">₹300,000.00</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Operational Savings / km:</span>
+            <span id="res-savings-km" class="row-val text-green">₹5.50 / km</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Annual Running Savings:</span>
+            <span id="res-annual-savings" class="row-val">₹82,500.00 / yr</span>
+          </div>
+        </div>
+
+        <div class="results-note">
+          <span class="note-icon">📈</span>
+          <p>After 54,545 km, all subsequent driving yields pure cumulative operational profit compared to the petrol vehicle.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const evPrice = document.getElementById('ev-price');
+    const petrolPrice = document.getElementById('petrol-price');
+    const evCostKm = document.getElementById('ev-cost-km');
+    const petrolCostKm = document.getElementById('petrol-cost-km');
+    const annualDist = document.getElementById('annual-dist');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const evCostSym = document.getElementById('ev-cost-sym');
+    const petrolCostSym = document.getElementById('petrol-cost-sym');
+    const resBeDist = document.getElementById('res-be-dist');
+    const resBeTime = document.getElementById('res-be-time');
+    const resPremium = document.getElementById('res-premium');
+    const resSavingsKm = document.getElementById('res-savings-km');
+    const resAnnualSavings = document.getElementById('res-annual-savings');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr) {
+      const sym = currencySymbols[curr] || '₹';
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function calculate() {
+      const ePrice = parseFloat(evPrice.value) || 0;
+      const pPrice = parseFloat(petrolPrice.value) || 0;
+      const eCost = parseFloat(evCostKm.value) || 0;
+      const pCost = parseFloat(petrolCostKm.value) || 0;
+      const dist = parseFloat(annualDist.value) || 1;
+      const curr = currencySelect.value || 'INR';
+
+      evCostSym.textContent = `${currencySymbols[curr] || '₹'} / km`;
+      petrolCostSym.textContent = `${currencySymbols[curr] || '₹'} / km`;
+
+      const premium = ePrice - pPrice;
+      const savingsPerKm = pCost - eCost;
+
+      resPremium.textContent = formatMoney(premium, curr);
+      resSavingsKm.textContent = `${formatMoney(savingsPerKm, curr)} / km`;
+
+      if (premium <= 0) {
+        resBeDist.textContent = '0 km (Immediate)';
+        resBeTime.textContent = 'Day 1 — EV has no upfront price premium!';
+        resAnnualSavings.textContent = formatMoney(savingsPerKm * dist, curr);
+        return;
+      }
+
+      if (savingsPerKm <= 0) {
+        resBeDist.textContent = 'N/A';
+        resBeTime.textContent = 'EV running cost is higher than or equal to petrol.';
+        resAnnualSavings.textContent = formatMoney(0, curr);
+        return;
+      }
+
+      const beDist = premium / savingsPerKm;
+      const beYears = beDist / dist;
+      const beMonths = beYears * 12;
+      const annualSav = savingsPerKm * dist;
+
+      resBeDist.textContent = `${Math.round(beDist).toLocaleString('en-IN')} km`;
+      resBeTime.textContent = `Approx. ${beYears.toFixed(1)} years (${beMonths.toFixed(1)} months)`;
+      resAnnualSavings.textContent = `${formatMoney(annualSav, curr)} / yr`;
+    }
+
+    [currencySelect, evPrice, petrolPrice, evCostKm, petrolCostKm, annualDist].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      evPrice.value = '1500000';
+      petrolPrice.value = '1200000';
+      evCostKm.value = '1.20';
+      petrolCostKm.value = '6.70';
+      annualDist.value = '15000';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .split-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #34d399;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .text-green {
+    color: #16a34a !important;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .split-input-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

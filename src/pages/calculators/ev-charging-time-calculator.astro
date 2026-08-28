@@ -1,0 +1,382 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-charging-time-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Charging Session Parameters</h2>
+        <span class="column-subtitle">Estimate replenishment duration based on power supply</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Battery Capacity -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="battery-capacity">Total Battery Capacity</label>
+            <span class="inline-unit-hint">kWh</span>
+          </div>
+          <input type="number" id="battery-capacity" class="form-input" value="50" min="1" max="250" step="0.5" required />
+          <span class="field-hint">e.g. 50 kWh for electric sedan</span>
+        </div>
+
+        <!-- SOC Range -->
+        <div class="soc-slider-group">
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="current-soc">Starting SOC</label>
+              <span id="current-soc-val" class="live-slider-val">20%</span>
+            </div>
+            <input type="range" id="current-soc" min="0" max="95" value="20" step="5" class="form-slider" />
+          </div>
+
+          <div class="form-row">
+            <div class="label-with-val">
+              <label class="form-label" for="target-soc">Target SOC</label>
+              <span id="target-soc-val" class="live-slider-val">80%</span>
+            </div>
+            <input type="range" id="target-soc" min="5" max="100" value="80" step="5" class="form-slider" />
+          </div>
+        </div>
+
+        <!-- Charger Power Rating -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="charger-power">Charger Delivery Power Rating</label>
+            <span class="inline-unit-hint">kW</span>
+          </div>
+          <input type="number" id="charger-power" class="form-input" value="7.4" min="0.5" max="350" step="0.1" required />
+          <div class="preset-pills">
+            <button type="button" class="preset-pill" data-power="3.3">3.3 kW (16A AC)</button>
+            <button type="button" class="preset-pill active" data-power="7.4">7.4 kW (Wallbox)</button>
+            <button type="button" class="preset-pill" data-power="11">11 kW (3-Phase)</button>
+            <button type="button" class="preset-pill" data-power="50">50 kW (DC Fast)</button>
+            <button type="button" class="preset-pill" data-power="120">120 kW (DC)</button>
+          </div>
+        </div>
+
+        <!-- Charging Efficiency -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="efficiency">Charging Efficiency</label>
+            <span id="efficiency-val" class="live-slider-val">90%</span>
+          </div>
+          <input type="range" id="efficiency" min="70" max="98" value="90" step="1" class="form-slider" />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Estimated Charging Duration</span>
+          <span id="res-time-formatted" class="primary-result-val">4h 30m</span>
+          <span id="res-decimal-hours" class="primary-result-sub">4.50 decimal hours</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Energy Needed:</span>
+            <span id="res-energy-needed" class="row-val">30.00 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Effective Charging Power:</span>
+            <span id="res-eff-power" class="row-val">6.66 kW</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Replenishment Band:</span>
+            <span id="res-band" class="row-val">20% &rarr; 80% (+60%)</span>
+          </div>
+        </div>
+
+        <div class="results-note">
+          <span class="note-icon">⚡</span>
+          <p>DC fast charging follows a non-linear curve. As the pack surpasses 80% SOC, BMS thermal management throttles power to preserve cell health.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const batteryCapacity = document.getElementById('battery-capacity');
+    const currentSoc = document.getElementById('current-soc');
+    const targetSoc = document.getElementById('target-soc');
+    const chargerPower = document.getElementById('charger-power');
+    const efficiency = document.getElementById('efficiency');
+    const resetBtn = document.getElementById('reset-btn');
+    const presetPills = document.querySelectorAll('.preset-pill');
+
+    const currentSocVal = document.getElementById('current-soc-val');
+    const targetSocVal = document.getElementById('target-soc-val');
+    const efficiencyVal = document.getElementById('efficiency-val');
+
+    const resTimeFormatted = document.getElementById('res-time-formatted');
+    const resDecimalHours = document.getElementById('res-decimal-hours');
+    const resEnergyNeeded = document.getElementById('res-energy-needed');
+    const resEffPower = document.getElementById('res-eff-power');
+    const resBand = document.getElementById('res-band');
+
+    function formatHoursAndMinutes(decimalHours) {
+      if (decimalHours <= 0 || !isFinite(decimalHours)) return '0m';
+      const totalMinutes = Math.round(decimalHours * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      if (hours === 0) return `${minutes}m`;
+      if (minutes === 0) return `${hours}h`;
+      return `${hours}h ${minutes}m`;
+    }
+
+    function calculate() {
+      let cap = parseFloat(batteryCapacity.value) || 0;
+      let cSoc = parseFloat(currentSoc.value) || 0;
+      let tSoc = parseFloat(targetSoc.value) || 0;
+      let power = parseFloat(chargerPower.value) || 1;
+      let eff = parseFloat(efficiency.value) || 90;
+
+      if (tSoc < cSoc) {
+        tSoc = cSoc;
+        targetSoc.value = cSoc;
+      }
+
+      currentSocVal.textContent = `${cSoc}%`;
+      targetSocVal.textContent = `${tSoc}%`;
+      efficiencyVal.textContent = `${eff}%`;
+
+      const socDelta = tSoc - cSoc;
+      const energyNeeded = (cap * socDelta) / 100;
+      const effPower = power * (eff / 100);
+      const hours = effPower > 0 ? energyNeeded / effPower : 0;
+
+      resTimeFormatted.textContent = formatHoursAndMinutes(hours);
+      resDecimalHours.textContent = `${hours.toFixed(2)} decimal hours`;
+      resEnergyNeeded.textContent = `${energyNeeded.toFixed(2)} kWh`;
+      resEffPower.textContent = `${effPower.toFixed(2)} kW`;
+      resBand.textContent = `${cSoc}% → ${tSoc}% (+${socDelta}%)`;
+    }
+
+    presetPills.forEach((pill) => {
+      pill.addEventListener('click', () => {
+        presetPills.forEach((p) => p.classList.remove('active'));
+        pill.classList.add('active');
+        chargerPower.value = pill.getAttribute('data-power');
+        calculate();
+      });
+    });
+
+    [batteryCapacity, currentSoc, targetSoc, chargerPower, efficiency].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      batteryCapacity.value = '50';
+      currentSoc.value = '20';
+      targetSoc.value = '80';
+      chargerPower.value = '7.4';
+      efficiency.value = '90';
+      presetPills.forEach((p) => p.classList.remove('active'));
+      presetPills[1].classList.add('active');
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .live-slider-val {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-electric-accent);
+  }
+
+  .form-slider {
+    width: 100%;
+    accent-color: var(--color-electric-accent);
+    cursor: pointer;
+  }
+
+  .preset-pills {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.35rem;
+  }
+
+  .preset-pill {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .preset-pill:hover {
+    border-color: var(--color-border-dark);
+    color: var(--color-brand);
+  }
+
+  .preset-pill.active {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    border-color: var(--color-brand);
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .results-note {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

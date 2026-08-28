@@ -1,0 +1,506 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumbs from '../ui/Breadcrumbs.astro';
+import JsonLd from '../ui/JsonLd.astro';
+import CalculatorCard from './CalculatorCard.astro';
+import type { CalculatorMeta } from '../../lib/calculators/types.ts';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+import { getCanonicalUrl } from '../../lib/config/site';
+
+interface Props {
+  calculator: CalculatorMeta;
+}
+
+const { calculator } = Astro.props;
+
+const canonicalUrl = getCanonicalUrl(`/calculators/${calculator.slug}`);
+
+const breadcrumbItems = [
+  { name: 'Calculators', url: '/calculators' },
+  { name: calculator.title, url: `/calculators/${calculator.slug}` },
+];
+
+const webAppSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: `${calculator.title} — ECargyan`,
+  url: canonicalUrl,
+  applicationCategory: 'UtilityApplication',
+  operatingSystem: 'All',
+  browserRequirements: 'Requires JavaScript',
+  description: calculator.metaDescription,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+};
+
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: calculator.faqs.map((faq) => ({
+    '@type': 'Question',
+    name: faq.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: faq.answer,
+    },
+  })),
+};
+
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: getCanonicalUrl('/'),
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Calculators',
+      item: getCanonicalUrl('/calculators'),
+    },
+    {
+      '@type': 'ListItem',
+      position: 3,
+      name: calculator.title,
+      item: canonicalUrl,
+    },
+  ],
+};
+
+const relatedCalculators = calculator.relatedSlugs
+  .map((s) => CALCULATOR_REGISTRY[s])
+  .filter(Boolean);
+---
+
+<BaseLayout
+  seo={{
+    title: `${calculator.title} | ECargyan EV Tools`,
+    description: calculator.metaDescription,
+    canonicalUrl,
+    ogType: 'website',
+  }}
+  currentPath={`/calculators/${calculator.slug}`}
+>
+  <JsonLd schema={[webAppSchema, faqSchema, breadcrumbSchema]} />
+
+  <!-- Masthead -->
+  <header class="calc-masthead">
+    <div class="container">
+      <Breadcrumbs items={breadcrumbItems} />
+
+      <div class="calc-masthead-inner">
+        <div class="calc-kicker-row">
+          <span class="calc-kicker">{calculator.categoryName}</span>
+          <span class="calc-kicker-dot" aria-hidden="true">&bull;</span>
+          <span class="calc-version-pill">Deterministic Model v1.2</span>
+        </div>
+
+        <h1 class="calc-main-title">{calculator.title}</h1>
+        <p class="calc-main-deck">{calculator.tagline}</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Calculator Grid Area -->
+  <main class="container calc-main-container">
+    <div class="calc-tool-surface">
+      <slot />
+    </div>
+
+    <!-- Editorial Mathematical Formula Section -->
+    <section class="calc-section calc-formula-section" aria-labelledby="formula-heading">
+      <div class="section-header">
+        <h2 id="formula-heading" class="section-title">Mathematical Formula & Physical Model</h2>
+      </div>
+      <div class="formula-box">
+        <p class="formula-desc">{calculator.formulaDescription}</p>
+        <div class="formula-steps-list">
+          {calculator.formulaSteps.map((step, idx) => (
+            <div class="formula-step-row">
+              <span class="step-num">{idx + 1}</span>
+              <code class="step-equation">{step}</code>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Worked Example Section -->
+    <section class="calc-section calc-example-section" aria-labelledby="example-heading">
+      <div class="section-header">
+        <h2 id="example-heading" class="section-title">Worked Example</h2>
+        <span class="badge badge-neutral">Reference Benchmark</span>
+      </div>
+      <div class="example-box">
+        <h3 class="example-title">{calculator.example.title}</h3>
+        <p class="example-desc">{calculator.example.description}</p>
+
+        <div class="example-inputs-grid">
+          {Object.entries(calculator.example.inputs).map(([k, v]) => (
+            <div class="example-input-cell">
+              <span class="cell-label">{k}</span>
+              <span class="cell-val">{v}</span>
+            </div>
+          ))}
+        </div>
+
+        <div class="example-output-bar">
+          <span class="output-label">Computed Result:</span>
+          <span class="output-val">{calculator.example.expectedOutput}</span>
+        </div>
+        {calculator.example.notes && (
+          <p class="example-notes">{calculator.example.notes}</p>
+        )}
+      </div>
+    </section>
+
+    <!-- Editorial FAQs -->
+    {calculator.faqs.length > 0 && (
+      <section class="calc-section calc-faq-section" aria-labelledby="faq-heading">
+        <div class="section-header">
+          <h2 id="faq-heading" class="section-title">Frequently Asked Questions</h2>
+        </div>
+        <div class="faq-accordion-list">
+          {calculator.faqs.map((faq) => (
+            <details class="faq-item">
+              <summary class="faq-question">
+                <span>{faq.question}</span>
+                <span class="faq-chevron" aria-hidden="true">+</span>
+              </summary>
+              <div class="faq-answer">
+                <p>{faq.answer}</p>
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <!-- Editorial Disclaimer -->
+    <aside class="calc-disclaimer-box" aria-label="Editorial Disclaimer">
+      <div class="disclaimer-inner">
+        <span class="disclaimer-tag">Technical Disclaimer:</span>
+        <p class="disclaimer-text">{calculator.disclaimer}</p>
+      </div>
+    </aside>
+
+    <!-- Related Calculators -->
+    {relatedCalculators.length > 0 && (
+      <section class="calc-section calc-related-section" aria-labelledby="related-heading">
+        <div class="section-header">
+          <h2 id="related-heading" class="section-title">Related EV Calculators</h2>
+          <a href="/calculators" class="section-link">View All Tools &rarr;</a>
+        </div>
+        <div class="related-tools-grid">
+          {relatedCalculators.map((relCalc) => (
+            <CalculatorCard calculator={relCalc} />
+          ))}
+        </div>
+      </section>
+    )}
+  </main>
+</BaseLayout>
+
+<style>
+  .calc-masthead {
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: clamp(2rem, 4vw, 3.25rem) 0 clamp(1.5rem, 3vw, 2.25rem);
+  }
+
+  .calc-masthead-inner {
+    margin-top: 0.75rem;
+    max-width: 820px;
+  }
+
+  .calc-kicker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .calc-kicker {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-electric-accent);
+  }
+
+  .calc-kicker-dot {
+    color: var(--color-border-dark);
+  }
+
+  .calc-version-pill {
+    font-size: 0.6875rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .calc-main-title {
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+    color: var(--color-brand);
+    margin-bottom: 0.65rem;
+  }
+
+  .calc-main-deck {
+    font-size: clamp(0.9375rem, 2vw, 1.125rem);
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+  }
+
+  .calc-main-container {
+    padding: clamp(2rem, 4vw, 3.5rem) 1.5rem clamp(3rem, 6vw, 6rem);
+  }
+
+  .calc-tool-surface {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+    padding: clamp(1.5rem, 3.5vw, 2.5rem);
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .calc-section {
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  /* Formula Box */
+  .formula-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.5rem;
+  }
+
+  .formula-desc {
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin-bottom: 1.25rem;
+  }
+
+  .formula-steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .formula-step-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background-color: var(--color-surface-subtle);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-xs);
+    border-left: 3px solid var(--color-electric-accent);
+  }
+
+  .step-num {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-electric-accent);
+  }
+
+  .step-equation {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--color-text-main);
+    word-break: break-all;
+  }
+
+  /* Example Box */
+  .example-box {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.5rem;
+  }
+
+  .example-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.4rem;
+  }
+
+  .example-desc {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+  }
+
+  .example-inputs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .example-input-cell {
+    background-color: var(--color-surface-subtle);
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .cell-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .cell-val {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .example-output-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 0.85rem 1.25rem;
+    border-radius: var(--radius-xs);
+  }
+
+  .output-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .output-val {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .example-notes {
+    margin-top: 0.85rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  /* FAQ Accordion */
+  .faq-accordion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .faq-item {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .faq-question {
+    padding: 1.15rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.15s ease;
+  }
+
+  .faq-question::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-question:hover {
+    background-color: var(--color-surface-subtle);
+  }
+
+  .faq-chevron {
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--color-electric-accent);
+    font-weight: 400;
+    transition: transform 0.2s ease;
+  }
+
+  .faq-item[open] .faq-chevron {
+    transform: rotate(45deg);
+  }
+
+  .faq-answer {
+    padding: 0 1.25rem 1.25rem;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+
+  /* Disclaimer */
+  .calc-disclaimer-box {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .disclaimer-tag {
+    font-size: 0.6875rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  .disclaimer-text {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  /* Related Tools */
+  .related-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .related-tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .example-output-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+  }
+</style>

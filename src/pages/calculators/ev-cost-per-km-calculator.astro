@@ -1,0 +1,352 @@
+---
+import CalculatorShell from '../../components/calculators/CalculatorShell.astro';
+import { CALCULATOR_REGISTRY } from '../../lib/calculators/registry.ts';
+
+const calculator = CALCULATOR_REGISTRY['ev-cost-per-km-calculator'];
+---
+
+<CalculatorShell calculator={calculator}>
+  <div class="calc-interface-grid">
+    <!-- Left Column: Inputs -->
+    <div class="calc-inputs-column">
+      <div class="column-header">
+        <h2 class="column-title">Unit Cost Inputs</h2>
+        <span class="column-subtitle">Compute direct per-kilometer energy expenditure</span>
+      </div>
+
+      <form id="calc-form" class="calc-form" onsubmit="return false;">
+        <!-- Currency Selection -->
+        <div class="form-row">
+          <label class="form-label" for="currency-select">Currency</label>
+          <select id="currency-select" class="form-select">
+            <option value="INR" selected>INR (₹) — Indian Rupee</option>
+            <option value="USD">USD ($) — US Dollar</option>
+            <option value="EUR">EUR (€) — Euro</option>
+            <option value="GBP">GBP (£) — British Pound</option>
+            <option value="AED">AED (د.إ) — UAE Dirham</option>
+            <option value="AUD">AUD (A$) — Australian Dollar</option>
+            <option value="CAD">CAD (C$) — Canadian Dollar</option>
+          </select>
+        </div>
+
+        <!-- Energy Consumption with Unit Selector -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="efficiency-input">Energy Consumption / Efficiency</label>
+            <select id="efficiency-unit" class="unit-mini-select">
+              <option value="Wh/km" selected>Wh/km</option>
+              <option value="km/kWh">km/kWh</option>
+              <option value="kWh/100km">kWh/100km</option>
+              <option value="mi/kWh">mi/kWh</option>
+            </select>
+          </div>
+          <input type="number" id="efficiency-input" class="form-input" value="140" min="0.1" max="1000" step="1" required />
+          <span class="field-hint">e.g. 140 Wh/km (7.14 km/kWh) for standard electric hatchback</span>
+        </div>
+
+        <!-- Electricity Tariff -->
+        <div class="form-row">
+          <div class="label-with-val">
+            <label class="form-label" for="rate">Electricity Tariff Rate (per kWh)</label>
+            <span id="rate-symbol" class="inline-unit-hint">₹ / kWh</span>
+          </div>
+          <input type="number" id="rate" class="form-input" value="7.00" min="0.1" max="100" step="0.25" required />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" id="reset-btn" class="btn btn-secondary btn-sm">Reset Defaults</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right Column: Results -->
+    <div class="calc-results-column">
+      <div class="results-card">
+        <div class="primary-result-box">
+          <span class="primary-result-lbl">Cost Per Kilometer</span>
+          <span id="res-cost-km" class="primary-result-val">₹0.98</span>
+          <span id="res-cost-100km" class="primary-result-sub">₹98.00 per 100 km</span>
+        </div>
+
+        <div class="breakdown-table">
+          <div class="breakdown-row">
+            <span class="row-lbl">Energy Drawn per km:</span>
+            <span id="res-energy-km" class="row-val">0.140 kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">Efficiency in km/kWh:</span>
+            <span id="res-eff-km-kwh" class="row-val">7.14 km/kWh</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="row-lbl">1,000 km Energy Cost:</span>
+            <span id="res-cost-1000km" class="row-val">₹980.00</span>
+          </div>
+        </div>
+
+        <div class="results-note">
+          <span class="note-icon">💡</span>
+          <p>At ₹0.98/km, driving 15,000 km annually requires under ₹15,000 in direct electricity expense.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</CalculatorShell>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const currencySelect = document.getElementById('currency-select');
+    const efficiencyInput = document.getElementById('efficiency-input');
+    const efficiencyUnit = document.getElementById('efficiency-unit');
+    const rate = document.getElementById('rate');
+    const resetBtn = document.getElementById('reset-btn');
+    const rateSymbol = document.getElementById('rate-symbol');
+
+    const resCostKm = document.getElementById('res-cost-km');
+    const resCost100km = document.getElementById('res-cost-100km');
+    const resEnergyKm = document.getElementById('res-energy-km');
+    const resEffKmKwh = document.getElementById('res-eff-km-kwh');
+    const resCost1000km = document.getElementById('res-cost-1000km');
+
+    const currencySymbols = {
+      INR: '₹',
+      USD: '$',
+      EUR: '€',
+      GBP: '£',
+      AED: 'د.إ',
+      AUD: 'A$',
+      CAD: 'C$',
+    };
+
+    function formatMoney(amount, curr) {
+      const sym = currencySymbols[curr] || '₹';
+      if (curr === 'AED') return `${amount.toFixed(2)} ${sym}`;
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    function toKmPerKwh(val, unit) {
+      if (val <= 0) return 0;
+      if (unit === 'km/kWh') return val;
+      if (unit === 'Wh/km') return 1000 / val;
+      if (unit === 'kWh/100km') return 100 / val;
+      if (unit === 'mi/kWh') return val * 1.60934;
+      return val;
+    }
+
+    function calculate() {
+      const effVal = parseFloat(efficiencyInput.value) || 0;
+      const unit = efficiencyUnit.value || 'Wh/km';
+      const r = parseFloat(rate.value) || 0;
+      const curr = currencySelect.value || 'INR';
+
+      rateSymbol.textContent = `${currencySymbols[curr] || '₹'} / kWh`;
+
+      const kmPerKwh = toKmPerKwh(effVal, unit);
+      if (kmPerKwh <= 0 || r <= 0) {
+        resCostKm.textContent = formatMoney(0, curr);
+        resCost100km.textContent = `${formatMoney(0, curr)} per 100 km`;
+        resEnergyKm.textContent = '0 kWh';
+        resEffKmKwh.textContent = '0 km/kWh';
+        resCost1000km.textContent = formatMoney(0, curr);
+        return;
+      }
+
+      const energyPerKm = 1 / kmPerKwh;
+      const costPerKm = energyPerKm * r;
+      const costPer100Km = costPerKm * 100;
+      const costPer1000Km = costPerKm * 1000;
+
+      resCostKm.textContent = formatMoney(costPerKm, curr);
+      resCost100km.textContent = `${formatMoney(costPer100Km, curr)} per 100 km`;
+      resEnergyKm.textContent = `${energyPerKm.toFixed(3)} kWh`;
+      resEffKmKwh.textContent = `${kmPerKwh.toFixed(2)} km/kWh`;
+      resCost1000km.textContent = formatMoney(costPer1000Km, curr);
+    }
+
+    efficiencyUnit.addEventListener('change', () => {
+      const u = efficiencyUnit.value;
+      if (u === 'Wh/km') efficiencyInput.value = '140';
+      else if (u === 'km/kWh') efficiencyInput.value = '7.14';
+      else if (u === 'kWh/100km') efficiencyInput.value = '14.0';
+      else if (u === 'mi/kWh') efficiencyInput.value = '4.44';
+      calculate();
+    });
+
+    [currencySelect, efficiencyInput, efficiencyUnit, rate].forEach((el) => {
+      el.addEventListener('input', calculate);
+      el.addEventListener('change', calculate);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      currencySelect.value = 'INR';
+      efficiencyUnit.value = 'Wh/km';
+      efficiencyInput.value = '140';
+      rate.value = '7.00';
+      calculate();
+    });
+
+    calculate();
+  });
+</script>
+
+<style>
+  .calc-interface-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .column-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .column-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-brand);
+    margin-bottom: 0.25rem;
+  }
+
+  .column-subtitle {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .label-with-val {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .unit-mini-select {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-secondary);
+  }
+
+  .inline-unit-hint {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text-main);
+  }
+
+  .field-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-row {
+    padding-top: 0.5rem;
+  }
+
+  /* Results Card */
+  .results-card {
+    background-color: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .primary-result-box {
+    background-color: var(--color-brand);
+    color: #ffffff;
+    padding: 1.5rem;
+    border-radius: var(--radius-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .primary-result-lbl {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #38bdf8;
+  }
+
+  .primary-result-val {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-family: var(--font-display);
+  }
+
+  .primary-result-sub {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+  }
+
+  .breakdown-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    background-color: var(--color-surface);
+    padding: 1.25rem;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .row-lbl {
+    color: var(--color-text-secondary);
+  }
+
+  .row-val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--color-brand);
+  }
+
+  .results-note {
+    display: flex;
+    gap: 0.65rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.45;
+  }
+
+  @media (max-width: 860px) {
+    .calc-interface-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
