@@ -68,10 +68,6 @@ const websiteSchema = generateWebSiteJsonLd();
         <h1 class="lead-heading">{SITE_CONFIG.name}</h1>
         <p class="lead-deck">{customTagline}</p>
       </div>
-      <div class="lead-meta-pill">
-        <span class="pulse-dot"></span>
-        <span>{totalArticles} Published Dispatches</span>
-      </div>
     </div>
   </section>
 
@@ -219,29 +215,6 @@ const websiteSchema = generateWebSiteJsonLd();
     color: var(--color-text-secondary);
     max-width: 620px;
     line-height: 1.5;
-  }
-
-  .lead-meta-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.75rem;
-    background-color: var(--color-surface-subtle);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .pulse-dot {
-    width: 7px;
-    height: 7px;
-    background-color: var(--color-electric-green);
-    border-radius: 50%;
   }
 
   .main-editorial-wrapper {
