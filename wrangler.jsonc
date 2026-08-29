@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ecargyan-com",
-  "account_id": "8ae7dd4a86c2253fe2b4597a9ac54b8a",
+  "account_id": "1cd8be7b2bb9ffa8f67e341e2049ddbd",
   "main": "./dist/_worker.js/index.js",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": [
